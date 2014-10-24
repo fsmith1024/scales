@@ -1,5 +1,5 @@
 
-Require Import NZAxioms NZMulOrder NZPow.
+Require Import NZAxioms NZMulOrder NZPow NZDomain.
 Require Import Psatz.
 
 Module Type Log (Import A: Typ).
@@ -23,6 +23,10 @@ Module Type NLogProp
        (Import D : NZMulOrderProp A)
        (Import E : NZPowProp A B D).
 
+
+
+Module T := NZDomainProp A.
+
 Section N.
 
 Parameter n : t.
@@ -39,27 +43,27 @@ Qed.
 
 Lemma log_nonneg : forall a, 0 <= log n a.
 Proof.
- intros a. destruct (le_gt_cases a 0) as [Ha|Ha].
- rewrite log_nonpos.
- easy.
- exact n_gt1.
- exact Ha.
- destruct (log_spec n a n_gt1 Ha) as (_,LT).
- apply lt_succ_r, (pow_gt_1 n).
- exact n_gt1.
- rewrite <- le_succ_l, <- one_succ in Ha. 
- order.
+  intros a. destruct (le_gt_cases a 0) as [Ha|Ha].
+  rewrite log_nonpos.
+  easy.
+  exact n_gt1.
+  exact Ha.
+  destruct (log_spec n a n_gt1 Ha) as (_,LT).
+  apply lt_succ_r, (pow_gt_1 n).
+  exact n_gt1.
+  rewrite <- le_succ_l, <- one_succ in Ha. 
+  order.
 Qed.
 
 (** A tactic for proving positivity and non-negativity *)
 
 Ltac order_pos :=
-((apply add_pos_pos || apply add_nonneg_nonneg ||
-  apply mul_pos_pos || apply mul_nonneg_nonneg ||
-  apply pow_nonneg || apply pow_pos_nonneg ||
-  apply log_nonneg || apply (le_le_succ_r 0));
- order_pos) (* in case of success of an apply, we recurse *)
-|| order'.  (* otherwise *)
+  ((apply add_pos_pos || apply add_nonneg_nonneg ||
+          apply mul_pos_pos || apply mul_nonneg_nonneg ||
+          apply pow_nonneg || apply pow_pos_nonneg ||
+          apply log_nonneg || apply (le_le_succ_r 0));
+   order_pos) (* in case of success of an apply, we recurse *)
+    || order'.  (* otherwise *)
 
 (** The spec of log indeed determines it *)
 
@@ -87,16 +91,16 @@ Qed.
 
 Instance log_wd : Proper (eq==>eq) (log n).
 Proof.
- intros x x' Hx.
- destruct (le_gt_cases x 0).
- rewrite (log_nonpos n  x n_gt1 H).
- rewrite (log_nonpos n x' n_gt1).
- trivial.
-
- reflexivity. now rewrite <- Hx.
- apply log_unique. apply log_nonneg.
- rewrite Hx in *.
- now apply (log_spec n x' n_gt1 H).
+  intros x x' Hx.
+  destruct (le_gt_cases x 0).
+  rewrite (log_nonpos n  x n_gt1 H).
+  rewrite (log_nonpos n x' n_gt1).
+  trivial.
+  
+  reflexivity. now rewrite <- Hx.
+  apply log_unique. apply log_nonneg.
+  rewrite Hx in *.
+  now apply (log_spec n x' n_gt1 H).
 Qed.
 
 (* Stopped here: We are simply replicated Coqs code for NZLog because
@@ -149,6 +153,31 @@ order_induction_0:
 order_induction'_0:
 *)
 
+Lemma iter_assoc:
+  forall n:nat, forall A : Type, forall f: A -> A, forall a:A,
+    f ((nat_iter n f) a) = (nat_iter n f) (f a).
+Proof.
+  intro n.
+  induction n.
+  simpl.
+  easy.
+
+  intros A f a.
+  simpl.
+  rewrite IHn.
+  easy.
+Qed.
+
+Lemma iter_succ_l:
+  forall k:nat, forall A:Type, forall f: A -> A, forall a:A,
+    f ((nat_iter k f) a) = (nat_iter (Datatypes.S k) f) a.
+Proof.
+  intros k A f a.
+  rewrite iter_assoc.
+  symmetry.
+  apply nat_iter_succ_r.
+Qed.
+
 (* This is a very stupid result basically equivalent to lt_succ_pred. *)
 Lemma pred_lt: forall z n : t, z < n -> P n < n.
 Proof.
@@ -156,6 +185,79 @@ Proof.
   apply succ_lt_mono.
   rewrite (lt_succ_pred _ _ Hnz).
   apply lt_succ_diag_r.
+Qed.
+
+Lemma iter_lt: 
+  forall k : nat, (0%nat < k)%nat -> forall a : t, (nat_iter k S) a > a.
+Proof.
+  induction k.
+  easy.
+  intros H a.
+  simpl.
+  assert (Hcases:= NPeano.Nat.lt_total 0 k).
+  decompose [or] Hcases.
+  
+  apply lt_lt_succ_r.
+  apply IHk.
+  exact H0.
+  
+  rewrite<- H1.
+  simpl.
+  apply lt_succ_diag_r.
+  
+  easy.  
+Qed.
+
+Lemma iter_le: 
+  forall k : nat, forall a : t, a <= (nat_iter k S) a.
+Proof.
+  intro k.
+  induction k.
+  simpl.
+  easy.
+
+  simpl.
+  intro a.
+  apply le_le_succ_r.
+  apply IHk.
+Qed.
+
+Lemma iter_succ_lt: 
+  forall a b : t, a < b -> exists k:nat, (nat_iter k S) a == b.
+Proof.
+  intros a b Hab.
+  assert (Hx:= T.itersucc_or_itersucc a b).
+  destruct Hx as [k Hx].
+  exists k.
+  decompose [or] Hx.
+  induction k.
+  simpl in H.
+  order.
+  simpl in H.
+  assert (Hb := iter_le k b).
+  apply le_le_succ_r in Hb.
+  symmetry in H.
+  rewrite H in Hb.
+  apply le_ngt in Hb.
+  easy.
+  symmetry in H.
+  exact H.
+Qed.
+
+Lemma iter_sub_succ_r: 
+  forall k : nat, forall a b : t,
+    b - ((nat_iter k S) a) == (nat_iter k P) (b - a).
+Proof.
+  intro k.
+  induction k.
+  intros a b.
+  simpl.
+  reflexivity.
+
+  intros a b.
+  simpl.
+  rewrite<- (IHk a b).
+  apply sub_succ_r.
 Qed.
 
 (* Lemma pred_nat: forall a:t, (forall b:t, a < S b) -> P a == a.
@@ -171,6 +273,319 @@ Qed.
    constraint on P comes from lt_succ_pred and pred_succ neither of
    which apply for the intial point.  
 *)
+
+Inductive pred_safe : nat -> t -> Prop := 
+| pred_safe_0 : 
+    forall a:t, pred_safe 0%nat a
+| pred_safe_S : 
+    forall n:nat, forall a:t, 
+      P a < a /\ pred_safe n (P a) -> pred_safe (Datatypes.S n) a
+.
+
+Lemma pred_safe_succ:
+  forall k:nat, forall a:t, pred_safe (Datatypes.S k) a -> pred_safe k a.
+Proof.
+  intro k; induction k.
+  
+  intros a Hp.
+  apply pred_safe_0.
+  
+  intros a Hp.
+  inversion Hp.
+  decompose [and] H0.
+  clear H1 H.
+  apply pred_safe_S.
+  apply conj.
+  exact H2.
+  apply (IHk _ H3).
+Qed.
+
+Instance pred_safe_wd:
+  forall k:nat, Proper (eq ==> iff) (pred_safe k).
+Proof.
+  intro k.
+  induction k.
+
+  intros x y Hxy.
+  apply conj.
+  intro Hy; apply pred_safe_0.
+  intro Hy; apply pred_safe_0.
+
+  intros  x y Hxy.
+  apply conj.
+  intro Hy.
+  inversion Hy.
+  apply pred_safe_S.
+  apply conj.
+  decompose [and] H0.
+  rewrite<- Hxy.
+  exact H2.
+
+  rewrite<- Hxy.
+  decompose [and] H0.
+  exact H3.
+
+  intro Hy.
+  inversion Hy.
+  apply pred_safe_S.
+  apply conj.
+  decompose [and] H0.
+  rewrite Hxy.
+  exact H2.
+
+  rewrite Hxy.
+  decompose [and] H0.
+  exact H3.
+Qed.
+
+(* I believe the above definition of pred_safe_wd is better than this one. 
+Lemma pred_safe_wd:
+  forall k:nat, Proper (eq ==> Basics.flip Basics.impl) (pred_safe k).
+Proof.
+  intro k.
+  induction k.
+
+  intros x y Hxy Hy.
+  apply pred_safe_0.
+
+  intros  x y Hxy Hy.
+  inversion Hy.
+  apply pred_safe_S.
+  apply conj.
+  rewrite Hxy.
+  decompose [and] H0.
+  exact H2.
+  rewrite Hxy.
+  decompose [and] H0.
+  exact H3.
+Qed.
+*)
+
+Lemma pred_safe_iter_succ:
+  forall k:nat, forall a:t, pred_safe k ((nat_iter k S) a).
+Proof.
+  intro k.
+  induction k.
+
+  intro a.
+  apply pred_safe_0.
+
+  intro a.
+  apply pred_safe_S.
+  simpl.
+  
+  apply conj.
+
+  rewrite pred_succ.
+  apply lt_succ_diag_r.
+ 
+  assert (Hq := pred_safe_wd k).
+  rewrite pred_succ.
+  exact (IHk a).
+Qed.
+
+Lemma pred_safe_XXX:
+  forall k:nat, forall a:t, 
+    pred_safe k a -> 
+    forall m:nat, pred_safe (k+m) (nat_iter m S a).
+Proof.
+  intros k a H m.
+  induction m.
+
+Qed.
+
+
+Lemma lt_succ_cases:
+  forall a b:t, a < b -> (S a) == b \/ (S a) < b.
+Proof.
+  intros a b Hab.
+  assert (H := lt_total (S a) b).
+  decompose [or] H.
+  right; exact H0.
+  left; exact H1.
+  
+  apply nlt_succ_r in Hab.
+  apply Hab in H1.
+  contradiction.
+Qed.
+
+Lemma lt_pred_safe:
+  forall k:nat, forall a b :t, a < b -> pred_safe k a -> pred_safe k b.
+Proof.
+
+  intro k.
+  induction k.
+  intros a b Hlt Ha.
+  apply pred_safe_0.
+
+  intros a b Hlt Ha.
+
+  assert (Hcases := lt_succ_cases _ _ Hlt).
+
+  assert (Hx := iter_succ_lt a b Hlt).
+  destruct Hx as [ m Hx ].
+  
+
+  rewrite<- Hx.
+
+  apply pred_safe_S.
+
+  
+  apply conj.
+
+  
+Qed.
+*)
+
+Lemma pred_safe_lt: 
+  forall k:nat, forall a:t, 
+    pred_safe (Datatypes.S k) a -> (nat_iter (Datatypes.S k) P a) < (nat_iter k P a).
+ Proof.
+   intro k.
+   induction k.
+   simpl.
+   
+   intros a Hp.
+   inversion Hp.
+   decompose [and] H0.
+   exact H2.
+
+   intros a Hp.
+   inversion Hp.
+   decompose [and] H0.
+   
+   simpl.
+   simpl in IHk.
+   clear H0 H H1.
+
+   assert (H4 := IHk (P a) H3).
+   rewrite iter_assoc.
+   exact H4.
+Qed.
+
+Lemma succ_pred_safe: 
+  forall k:nat, forall a:t, pred_safe k a -> (nat_iter k S) (nat_iter k P a) == a.
+Proof.
+  intro k.
+  induction k.
+  
+  simpl.
+  easy.
+  
+  intros a Hp.
+  simpl.
+  rewrite iter_assoc.
+  rewrite (lt_succ_pred (P (nat_iter k P a))).
+  apply IHk.
+  apply (pred_safe_succ _ _ Hp).
+  rewrite iter_succ_l.
+  apply pred_safe_lt.
+  exact Hp.
+Qed.
+
+Lemma iter_succ_eq: 
+  forall k:nat, forall a b:t, (nat_iter k S) a == (nat_iter k S) b <-> a == b.
+Proof.
+  intro k.
+  induction k.
+  simpl.
+  easy.
+
+  intros a b.
+  simpl.
+  apply conj.
+  intro H.
+  apply IHk.
+  apply succ_inj_wd.
+  exact H.
+  
+  intro H.
+  apply succ_inj_wd.
+  apply IHk.
+  exact H.
+Qed.
+
+Lemma iter_pred_eq:
+  forall k:nat, forall a b:t, 
+    pred_safe k a -> pred_safe k b -> (nat_iter k P) a == (nat_iter k P) b -> a == b.
+Proof.
+  intro k.
+  induction k.
+
+  simpl.
+  easy.
+
+  intros a b Hap Hbp.
+  intro H.
+  simpl in H.
+  rewrite iter_assoc in H.
+  rewrite iter_assoc in H.
+  inversion Hap.
+  decompose [and] H1.
+  inversion Hbp.
+  decompose [and] H6.
+  clear H0 H2 H5 H7 n1 a1 n0 a0 H1 H6.
+
+  assert (IHs := IHk _ _ H4 H9 H).
+  
+  apply succ_inj_wd in IHs.
+  rewrite (lt_succ_pred (P a) a H3) in IHs.
+  rewrite (lt_succ_pred (P b) b H8) in IHs.
+  exact IHs.
+Qed. 
+
+Lemma pred_safe_exists:
+  forall k:nat, forall a b :t,
+    a < b -> a == (nat_iter k P) b -> exists m:nat, (a == (nat_iter m P) b /\ pred_safe m b).
+Proof.
+  intro k.
+  induction k.
+  intros a b Hab.
+  simpl.
+  intro H.
+  exists 0%nat.
+  simpl.
+  apply conj.
+  exact H.
+  apply pred_safe_0.
+
+  intros a b Hab Heq.
+  
+  simpl in Heq.
+  rewrite iter_assoc in Heq.
+  assert (Hcases := lt_total a (P b)).
+  decompose [or] Hcases.
+
+  assert (IHs := IHk a (P b) H Heq).
+  destruct IHs as [ m (Ha,Hp) ].
+  exists (Datatypes.S m).
+  apply conj.
+  simpl.
+  rewrite iter_assoc.
+  exact Ha.
+ 
+  apply pred_safe_S.
+  apply conj.
+
+  apply (pred_lt _ _ Hab).
+  exact Hp.
+
+  (* Case a == P b *)
+  exists 1%nat.
+  simpl.
+  apply conj.
+  exact H0.
+  apply pred_safe_S.
+  apply conj.
+  rewrite H0 in Hab.
+  exact Hab.
+  apply pred_safe_0.
+  apply succ_lt_mono in H0.
+  rewrite (lt_succ_pred _ _ Hab) in H0.
+  apply nlt_succ_r in Hab.
+  apply Hab in H0.
+  contradiction.
+Qed.
 
 Lemma lt_plus_0 : forall a b k : t, a < b -> a + k == b -> k > 0.
 Proof.
@@ -193,7 +608,7 @@ Proof.
   apply Hab.
 Qed.
 
-Lemma ored_inj: forall za zb a b :t, za < a -> zb < b -> P a == P b -> a == b.
+Lemma pred_inj: forall za zb a b :t, za < a -> zb < b -> P a == P b -> a == b.
 Proof.
   intros za zb a b Hza Hzb Hpb.
   assert (Ha := lt_exists_pred za a Hza).  
@@ -214,9 +629,173 @@ Proof.
   exact Hpb.
 Qed.
 
-Lemma pred_succ_le: forall a b z: t, z < (b - a) -> (b - a) <= (S b - a).
+Lemma iter_pred_succ:
+  forall n : nat, forall a:t, (nat_iter n P) ((nat_iter n S) a) == a.
 Proof.
+  intro n.
+  induction n.
+  simpl.
+  easy.
 
+  intro a.
+  simpl.
+  rewrite (iter_assoc _ _ P).
+  rewrite pred_succ.
+
+  apply IHn.
+Qed.
+
+(* Lemma iter_succ_pred: 
+  forall n:nat, forall z a:t,
+    let pa := (nat_iter n P) a in
+    z < pa -> (nat_iter n S) pa == a.
+Proof.
+intro n.
+induction n.
+simpl.
+easy.
+
+intros z a.
+simpl.
+
+rewrite (iter_assoc n0 _ S).
+rewrite (lt_succ_pred z _).
+intros H.
+rewrite (IHn z).
+easy.
+
+
+
+
+
+
+Qed.
+
+*)
+
+Lemma iter_succ0_or_pred0_safe:
+  forall a : t, exists k : nat, 
+    a == nat_iter k S 0 \/ (a == nat_iter k P 0 /\ pred_safe k 0).
+Proof.
+  intro a.
+
+  assert (Hcases := lt_total a 0).
+  decompose [or] Hcases.
+
+  assert (Ha := T.itersucc0_or_iterpred0 a).
+  destruct Ha as [p Ha].
+  decompose [or] Ha.
+  exists p.
+  left.
+  exact H0.
+
+  assert (H2 := pred_safe_exists p a 0 H H0).
+  destruct H2 as [m (H2a, H2b)].
+  exists m.
+  right.
+  apply (conj H2a H2b).
+
+  exists 0%nat.
+  left.
+  simpl.
+  exact H0.
+
+  assert (H:= iter_succ_lt _ _ H0).
+  destruct H as [k H].
+  exists k.
+  left.
+  symmetry.
+  exact H.
+Qed.
+
+(* 
+Lemma sub_safe:
+  forall a b : t, a <= b -> forall k:nat, pred_safe k a -> pred_safe k (b - a).
+Proof.
+  intro a.
+  apply (bi_induction (fun a => forall b : t, a <= b -> forall k:nat, pred_safe k a -> pred_safe k (b - a))).
+  
+  intros x y H.
+  apply conj.
+  intros H2 b Hb k.
+  rewrite<- H.
+  apply H2.
+  rewrite H; exact Hb.
+
+  intros H2 b Hb k.
+  rewrite H.
+  apply H2.
+  rewrite<- H.
+  exact Hb.
+
+  (* Case 0. *)
+  intros b Hb k Hk.
+  
+
+
+  
+Qed.
+*)
+
+Lemma sub_diag: forall a : t, a - a == 0.
+Proof.
+  intro a.
+  assert (Ha := iter_succ0_or_pred0_safe a).
+  destruct Ha as [na Ha].
+  destruct Ha.
+  simpl in H.
+  rewrite H.
+  rewrite iter_sub_succ_r.
+  rewrite sub_0_r.
+  rewrite iter_pred_succ.
+  reflexivity.
+
+  destruct H as (Ha, Hs).
+  
+  assert (H := sub_0_r a).
+  rewrite<- (succ_pred_safe na 0 Hs) in H.
+  rewrite<- Ha in H.
+  rewrite iter_sub_succ_r in H.
+  rewrite Ha in H at 3.
+  assert (Hsafe : pred_safe na (a - a)).
+  (* Would be done but don't know how to proceed to prove HSafe *)
+  apply (iter_pred_eq na (a-a) 0 Hsafe Hs H).
+Qed.
+
+Lemma sub_lt: forall a b k : t, a + k == b -> (b - a) == k.
+Proof.
+  intros a b k Hakb.
+  assert (Ha := T.itersucc0_or_iterpred0 a).
+  destruct Ha as [na Ha].
+  assert (Hb := T.itersucc0_or_iterpred0 b).
+  destruct Hb as [nb Hb].
+  assert (Hk := T.itersucc0_or_iterpred0 k).
+  destruct Hk as [nk Hk].
+  
+  
+Qed.
+
+Lemma pred_succ_le: forall a b: t, a <= b -> (b - a) <= (S b - a).
+Proof.
+  remember (fun a => forall b :t, a <= b -> (b - a) <= (S b - a)) as fna.
+  assert (Hproper : Proper (eq ==> iff) fna).
+  rewrite Heqfna.
+  solve_proper.
+  assert (H:= (T.central_induction_pred fna Hproper)).
+  rewrite Heqfna in H.
+  clear Hproper Heqfna.
+  apply (H 0).
+  
+  intros b Hba.
+  rewrite sub_0_r.
+  rewrite sub_0_r.
+  apply le_succ_diag_r.
+  
+  clear H.
+  intros a IH b z.
+  rewrite sub_succ_r.
+  rewrite sub_succ_r.
+  
 Qed.
 
 
@@ -264,81 +843,71 @@ Qed.
  
 Lemma aaa: forall a b z k : t, z < k -> a + k == b -> k == (b - a).
 Proof.
-apply (bi_induction (fun a => forall b z k : t, z < k -> a + k == b -> k == (b - a))).
-
-solve_proper.
-
-intros b z k Hzk Hkb.
-rewrite add_0_l in Hkb.
-rewrite sub_0_r.
-exact Hkb.
-
-intro a.
-apply conj.
-
-intros IH b z k Hzk Hak.
-
-rewrite add_succ_comm in Hak.
-assert (Hzk' := (lt_trans _ _ _ Hzk (lt_succ_diag_r _))).
-assert (IHs := IH b z (S k) Hzk' Hak).
-apply pred_wd in IHs.
-rewrite pred_succ in IHs.
-rewrite IHs.
-rewrite sub_succ_r.
-easy.
-
-intros IH b z k Hzk Hbk.
-
-
-intros IH.
-
-apply (bi_induction (fun b:t =>forall z k : t, z < k -> a + k == b -> k == b - a)).
-solve_proper.
-
-intros z k Hzk Hak.
-
-
-
-
-
-
+  apply (bi_induction (fun a => forall b z k : t, z < k -> a + k == b -> k == (b - a))).
+  
+  solve_proper.
+  
+  intros b z k Hzk Hkb.
+  rewrite add_0_l in Hkb.
+  rewrite sub_0_r.
+  exact Hkb.
+  
+  intro a.
+  apply conj.
+  
+  intros IH b z k Hzk Hak.
+  
+  rewrite add_succ_comm in Hak.
+  assert (Hzk' := (lt_trans _ _ _ Hzk (lt_succ_diag_r _))).
+  assert (IHs := IH b z (S k) Hzk' Hak).
+  apply pred_wd in IHs.
+  rewrite pred_succ in IHs.
+  rewrite IHs.
+  rewrite sub_succ_r.
+  easy.
+  
+  intros IH b z k Hzk Hbk.
+  
+  
+  intros IH.
+  
+  apply (bi_induction (fun b:t =>forall z k : t, z < k -> a + k == b -> k == b - a)).
+  solve_proper.
+  
+  intros z k Hzk Hak.
 
 Qed.
 
 Lemma aaa: forall a:t, forall z k : t, z < k -> forall b : t, a + k == b -> k == (b - a).
 Proof.
-
-apply (bi_induction (fun a => forall z k : t, z < k -> forall b : t, a + k == b -> k == (b - a))).
-
-solve_proper.
-
-intros z k Hzk b Hkb.
-rewrite<- Hkb.
-rewrite add_0_l; rewrite sub_0_r.
-easy.
-
-intros a.
-apply conj.
-
-intros IH z k Hzk b Hkb.
-rewrite sub_succ_r.
-rewrite <- (IH z (S k)).
-rewrite pred_succ.
-easy.
-
-apply (lt_trans _ _ _ Hzk (lt_succ_diag_r _)).
-
-rewrite<- add_succ_comm.
-exact Hkb.
-
-intros IH z k Hzk b Hkb.
-
-assert (IHs := IH z (P k) _ b).
-
-
-
-
-
+  
+  apply (bi_induction (fun a => forall z k : t, z < k -> forall b : t, a + k == b -> k == (b - a))).
+  
+  solve_proper.
+  
+  intros z k Hzk b Hkb.
+  rewrite<- Hkb.
+  rewrite add_0_l; rewrite sub_0_r.
+  easy.
+  
+  intros a.
+  apply conj.
+  
+  intros IH z k Hzk b Hkb.
+  rewrite sub_succ_r.
+  rewrite <- (IH z (S k)).
+  rewrite pred_succ.
+  easy.
+  
+  apply (lt_trans _ _ _ Hzk (lt_succ_diag_r _)).
+  
+  rewrite<- add_succ_comm.
+  exact Hkb.
+  
+  intros IH z k Hzk b Hkb.
+  
+  assert (IHs := IH z (P k) _ b).
+  
 
 Qed.
 
