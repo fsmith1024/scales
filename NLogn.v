@@ -1,4 +1,3 @@
-
 Require Import NZAxioms NZMulOrder NZPow NZDomain.
 Require Import Psatz.
 
@@ -10,7 +9,7 @@ Module Type NLogSpec (A: NZOrdAxiomsSig') (B: Pow' A) (C: Log A).
   Import A B C.
 
   Axiom log_spec: forall n a, n > 1 -> 0 < a -> n^(log n a) <= a < n^(S (log n a)).
-  Axiom log_nonpos: forall n a, n>1 -> a<=0 -> log n a = 0.
+  Axiom log_nonpos: forall n a, n>1 -> a<=0 -> log n a == 0.
 
 End NLogSpec.
 
@@ -36,6 +35,12 @@ Axiom n_gt1 : n > 1.
 Lemma n_gt0 : n > 0.
 Proof.
   assert (H:= n_gt1).
+  order'.
+Qed.
+
+Lemma n_ge0: n >= 0.
+Proof.
+  assert (H:=n_gt1).
   order'.
 Qed.
 
@@ -102,24 +107,6 @@ Proof.
   rewrite Hx in *.
   now apply (log_spec n x' n_gt1 H).
 Qed.
-
-(* Stopped here: We are simply replicated Coqs code for NZLog because
-that code only handles powers of 2.  So far th translation has been
-mechanical. log_exists below is my own proof, but induction doesn't work since Z doesn't terminate. *)
-
-(* 
-Lemma log_unique' : forall a b c, 0<=b -> 0<=c<2^b ->
- a == 2^b + c -> (log n) a == b.
-Proof.
- intros a b c Hb (Hc,H) EQ.
- apply log_unique. trivial.
-
- split.
- rewrite <- add_0_r at 1. now apply add_le_mono_l.
- rewrite pow_succ_r by order.
- rewrite two_succ at 2. nzsimpl. now apply add_lt_mono_l.
-Qed.
-*)
 
 (* ***********{ *)
 (* Detour: Subtraction is very underspecified.  Not sure why but it is a major road block. *)
@@ -242,6 +229,18 @@ Proof.
   easy.
   symmetry in H.
   exact H.
+Qed.
+
+Lemma iter_succ_le:
+  forall a b: t, a<=b -> exists k:nat, (nat_iter k S) a == b.
+Proof.
+  intros a b H.
+  apply lt_eq_cases in H.
+  decompose [or] H.
+  apply (iter_succ_lt a b H0).
+  exists 0%nat.
+  simpl.
+  exact H0.
 Qed.
 
 Lemma iter_sub_succ_r: 
@@ -384,7 +383,7 @@ Proof.
   exact (IHk a).
 Qed.
 
-Lemma pred_safe_XXX:
+Lemma pred_safe_plus:
   forall k:nat, forall a:t, 
     pred_safe k a -> 
     forall m:nat, pred_safe (k+m) (nat_iter m S a).
@@ -392,8 +391,41 @@ Proof.
   intros k a H m.
   induction m.
 
+  simpl.
+  replace (k+0%nat)%nat with k.
+  exact H.
+  rewrite<- plus_n_O.
+  reflexivity.
+
+  replace (k + Datatypes.S m)%nat with (Datatypes.S (k + m)%nat).
+  apply pred_safe_S.
+  apply conj.
+  simpl.
+  rewrite pred_succ.
+  apply lt_succ_diag_r.
+  simpl.
+  rewrite pred_succ.
+  exact IHm.
+  lia.
 Qed.
 
+Lemma pred_safe_plus_r:
+  forall k m:nat, forall a:t, pred_safe (k + m) a -> pred_safe k a.
+Proof.
+  intros k m.
+  induction m.
+  
+  replace (k + 0)%nat with k.
+  firstorder.
+  lia.
+
+  intro a.
+  replace (k + Datatypes.S m)%nat with (Datatypes.S (k + m)).
+  intro H.
+  apply pred_safe_succ in H.
+  apply (IHm _ H).
+  lia.
+Qed.
 
 Lemma lt_succ_cases:
   forall a b:t, a < b -> (S a) == b \/ (S a) < b.
@@ -409,33 +441,27 @@ Proof.
   contradiction.
 Qed.
 
-Lemma lt_pred_safe:
-  forall k:nat, forall a b :t, a < b -> pred_safe k a -> pred_safe k b.
+Lemma le_pred_safe:
+  forall k:nat, forall a b :t, a <= b -> pred_safe k a -> pred_safe k b.
 Proof.
 
-  intro k.
-  induction k.
-  intros a b Hlt Ha.
-  apply pred_safe_0.
+  intros k a b H.
 
-  intros a b Hlt Ha.
+  apply lt_eq_cases in H.
+  decompose [or] H.
 
-  assert (Hcases := lt_succ_cases _ _ Hlt).
+  apply iter_succ_lt in H0.
+  destruct H0 as [ m H0].
+  rewrite<- H0.
 
-  assert (Hx := iter_succ_lt a b Hlt).
-  destruct Hx as [ m Hx ].
-  
+  intro Hp.
+  assert (H2 := pred_safe_plus _ _ Hp m).
+  apply (pred_safe_plus_r _ _ _ H2).
 
-  rewrite<- Hx.
-
-  apply pred_safe_S.
-
-  
-  apply conj.
-
-  
+  rewrite H0.
+  firstorder.
 Qed.
-*)
+
 
 Lemma pred_safe_lt: 
   forall k:nat, forall a:t, 
@@ -645,34 +671,6 @@ Proof.
   apply IHn.
 Qed.
 
-(* Lemma iter_succ_pred: 
-  forall n:nat, forall z a:t,
-    let pa := (nat_iter n P) a in
-    z < pa -> (nat_iter n S) pa == a.
-Proof.
-intro n.
-induction n.
-simpl.
-easy.
-
-intros z a.
-simpl.
-
-rewrite (iter_assoc n0 _ S).
-rewrite (lt_succ_pred z _).
-intros H.
-rewrite (IHn z).
-easy.
-
-
-
-
-
-
-Qed.
-
-*)
-
 Lemma iter_succ0_or_pred0_safe:
   forall a : t, exists k : nat, 
     a == nat_iter k S 0 \/ (a == nat_iter k P 0 /\ pred_safe k 0).
@@ -708,359 +706,184 @@ Proof.
   exact H.
 Qed.
 
-(* 
-Lemma sub_safe:
-  forall a b : t, a <= b -> forall k:nat, pred_safe k a -> pred_safe k (b - a).
+
+Lemma sub_diag: forall a : t, 0 <= a -> a - a == 0.
 Proof.
-  intro a.
-  apply (bi_induction (fun a => forall b : t, a <= b -> forall k:nat, pred_safe k a -> pred_safe k (b - a))).
-  
-  intros x y H.
-  apply conj.
-  intros H2 b Hb k.
+  intros a Ha.
+  apply iter_succ_le in Ha.
+  destruct Ha as [k H].
+
   rewrite<- H.
-  apply H2.
-  rewrite H; exact Hb.
-
-  intros H2 b Hb k.
-  rewrite H.
-  apply H2.
-  rewrite<- H.
-  exact Hb.
-
-  (* Case 0. *)
-  intros b Hb k Hk.
-  
-
-
-  
-Qed.
-*)
-
-Lemma sub_diag: forall a : t, a - a == 0.
-Proof.
-  intro a.
-  assert (Ha := iter_succ0_or_pred0_safe a).
-  destruct Ha as [na Ha].
-  destruct Ha.
-  simpl in H.
-  rewrite H.
   rewrite iter_sub_succ_r.
   rewrite sub_0_r.
   rewrite iter_pred_succ.
   reflexivity.
-
-  destruct H as (Ha, Hs).
-  
-  assert (H := sub_0_r a).
-  rewrite<- (succ_pred_safe na 0 Hs) in H.
-  rewrite<- Ha in H.
-  rewrite iter_sub_succ_r in H.
-  rewrite Ha in H at 3.
-  assert (Hsafe : pred_safe na (a - a)).
-  (* Would be done but don't know how to proceed to prove HSafe *)
-  apply (iter_pred_eq na (a-a) 0 Hsafe Hs H).
 Qed.
 
-Lemma sub_lt: forall a b k : t, a + k == b -> (b - a) == k.
+Lemma iter_add_l: 
+  forall k:nat, forall a b : t,
+    ((nat_iter k S a) + b) == nat_iter k S (a + b).
 Proof.
-  intros a b k Hakb.
-  assert (Ha := T.itersucc0_or_iterpred0 a).
-  destruct Ha as [na Ha].
-  assert (Hb := T.itersucc0_or_iterpred0 b).
-  destruct Hb as [nb Hb].
-  assert (Hk := T.itersucc0_or_iterpred0 k).
-  destruct Hk as [nk Hk].
-  
-  
-Qed.
-
-Lemma pred_succ_le: forall a b: t, a <= b -> (b - a) <= (S b - a).
-Proof.
-  remember (fun a => forall b :t, a <= b -> (b - a) <= (S b - a)) as fna.
-  assert (Hproper : Proper (eq ==> iff) fna).
-  rewrite Heqfna.
-  solve_proper.
-  assert (H:= (T.central_induction_pred fna Hproper)).
-  rewrite Heqfna in H.
-  clear Hproper Heqfna.
-  apply (H 0).
-  
-  intros b Hba.
-  rewrite sub_0_r.
-  rewrite sub_0_r.
-  apply le_succ_diag_r.
-  
-  clear H.
-  intros a IH b z.
-  rewrite sub_succ_r.
-  rewrite sub_succ_r.
-  
-Qed.
-
-
-Lemma xxx: forall a b : t, (S b - S a) ==  (b - a).
-Proof.
-  apply (bi_induction (fun a => forall b: t, (S b - S a) == (b -a))).
-  solve_proper.
-
-  intros b.
-
-  rewrite sub_0_r.
-  rewrite sub_succ_r.
-  rewrite sub_0_r.
-  rewrite pred_succ.
-  reflexivity.
-
-  intro a.
-  apply conj.
-
-  intros IH b.
-  
-  rewrite sub_succ_r.
-  rewrite (sub_succ_r b a).
-  apply pred_wd.
-  apply IH.
-
-  intros IH b.
-  assert (IHs := IH b).
-  rewrite sub_succ_r in IHs.
-  rewrite (sub_succ_r b a) in IHs.
-  
-
-  assert (IHs := IH (S b) z).
-
-
-  rewrite sub_succ_r.
-
-  rewrite sub_succ_r.
-
-  
-  rewrite sub_succ_r in Hzb.
-
-  apply (lt_trans _ (pred_lt z (b - a) Hzb)
-Qed.
- 
-Lemma aaa: forall a b z k : t, z < k -> a + k == b -> k == (b - a).
-Proof.
-  apply (bi_induction (fun a => forall b z k : t, z < k -> a + k == b -> k == (b - a))).
-  
-  solve_proper.
-  
-  intros b z k Hzk Hkb.
-  rewrite add_0_l in Hkb.
-  rewrite sub_0_r.
-  exact Hkb.
-  
-  intro a.
-  apply conj.
-  
-  intros IH b z k Hzk Hak.
-  
-  rewrite add_succ_comm in Hak.
-  assert (Hzk' := (lt_trans _ _ _ Hzk (lt_succ_diag_r _))).
-  assert (IHs := IH b z (S k) Hzk' Hak).
-  apply pred_wd in IHs.
-  rewrite pred_succ in IHs.
-  rewrite IHs.
-  rewrite sub_succ_r.
-  easy.
-  
-  intros IH b z k Hzk Hbk.
-  
-  
-  intros IH.
-  
-  apply (bi_induction (fun b:t =>forall z k : t, z < k -> a + k == b -> k == b - a)).
-  solve_proper.
-  
-  intros z k Hzk Hak.
-
-Qed.
-
-Lemma aaa: forall a:t, forall z k : t, z < k -> forall b : t, a + k == b -> k == (b - a).
-Proof.
-  
-  apply (bi_induction (fun a => forall z k : t, z < k -> forall b : t, a + k == b -> k == (b - a))).
-  
-  solve_proper.
-  
-  intros z k Hzk b Hkb.
-  rewrite<- Hkb.
-  rewrite add_0_l; rewrite sub_0_r.
-  easy.
-  
-  intros a.
-  apply conj.
-  
-  intros IH z k Hzk b Hkb.
-  rewrite sub_succ_r.
-  rewrite <- (IH z (S k)).
-  rewrite pred_succ.
-  easy.
-  
-  apply (lt_trans _ _ _ Hzk (lt_succ_diag_r _)).
-  
-  rewrite<- add_succ_comm.
-  exact Hkb.
-  
-  intros IH z k Hzk b Hkb.
-  
-  assert (IHs := IH z (P k) _ b).
-  
-
-Qed.
-
- 
-Lemma yyy: forall a b : t, a <= b -> a + (b - a) == b.
-Proof.
-  apply (bi_induction (fun a:t => forall b : t, a <= b -> a + (b - a) == b)).
-
-  solve_proper.
-
-  intros b Hb.
-  rewrite add_0_l.
-  rewrite sub_0_r.
-  reflexivity.
-
-  intro a.
-  apply conj.
-
-  intros IH b HSba.
-  rewrite sub_succ_r.
-  apply le_succ_l in HSba.
-  assert (Hba :=  (lt_le_incl  _ _ HSba)).
-  assert (IHs := IH b Hba).
-  assert (H:= lt_plus_0 a b (b - a) HSba IHs).
-  rewrite add_succ_comm.
-  rewrite (lt_succ_pred _ _ H).
-  exact IHs.
-
-  intros IH b Hba.
-  
-  
-
-
-Qed.
-
-Lemma xxx: forall n:t, 0 < n -> forall m : t, m >= n -> S m - n == S (m - n).
-Proof.
-  apply (order_induction_0 (fun n => 0 < n -> forall m : t, m >= n -> S m - n == S (m - n))).
-  solve_proper.
-
-  intro H.
-  apply lt_irrefl in H.
-  contradiction.
-
-  intros n Hn IH Hn2 m Hnm.
-  
-  assert (Hcases:= lt_total n 0).
-  destruct Hcases.
-  apply le_ngt in Hn.
-  exfalso.
-  apply Hn.
-  exact H.
-
-  decompose [or] H.
-  rewrite H0 in *.
-  rewrite sub_succ_r.
-  rewrite sub_0_r.
-  rewrite pred_succ.
-  rewrite sub_succ_r.
-  rewrite sub_0_r.
-  rewrite (lt_succ_pred 0).
-  reflexivity.
-  order.
-
-  rewrite sub_succ_r.
-  rewrite sub_succ_r.
-  
-  apply le_succ_l in Hnm.
-  apply lt_le_incl in Hnm.
-  assert (H2:= IH H0 m Hnm).
-  rewrite H2.
-  
-  assert (Hcases := lt_total (S n) m).
-  decompose [or] Hcases.
-
-  
-
-  
-
-
-
-
-Qed.
-
-Lemma plus_sub_eq:
-  forall a b c:t, a + b == c -> b == (c -a).
-Proof.
-  apply (order_induction_0 (fun x:t => (forall b c:t, (x + b == c) -> b == (c - x)))).
-  intros x y Hxy.
-  apply conj.
-  intros H b c.
-  rewrite<- Hxy.
-  firstorder.
-
-  intros H b c.
-  rewrite Hxy.
-  firstorder.
-
-  intros b c.
-  rewrite sub_0_r.
-  rewrite add_0_l.
+  intro k.
+  induction k.
+  simpl.
   firstorder.
   
-  intros n Hn IH b c H.
-  rewrite sub_succ_r.
-  rewrite add_succ_comm in H.
-  assert (IHs := (IH (S b) c H)).
-  rewrite<- IHs.
-  rewrite pred_succ.
-  easy.
-
-  intros n Hn IH b c H.
-  apply succ_inj_wd in H.
-  rewrite<- add_succ_l in H.
-  assert (IHs := IH b (S c) H).
-  rewrite sub_succ_r in IHs.
-  
-
-  
-
-
-  
-
-
-
-
-
-
-Qed.
-
-Lemma plus_sub:
-  forall a b:t, b > a -> a + (b - a) == b.
-Proof.
   intros a b.
-  apply (lt_ind (fun x => a + (x - a) == x)).
-  intros x y Hxy.
-  rewrite Hxy.
-  firstorder.
+  simpl.
+  rewrite add_succ_l.
+  apply succ_inj_wd.
+  apply IHk.
+Qed.
+
+Lemma sub_le: forall a b k : t, 0 <= a -> a + k == b -> (b - a) == k.
+Proof.
+  intros a b k H0 Hakb.
+  apply iter_succ_le in H0.
+  destruct H0 as [m Ha].
+
+  rewrite<- Ha.
+  rewrite iter_sub_succ_r.
+  rewrite sub_0_r.
   
+  rewrite<- Hakb.
+  rewrite<- Ha.
 
+  rewrite iter_add_l.
+  rewrite iter_pred_succ.
+  apply add_0_l.
+Qed.
+
+(* The term pred_safe k (b - (nat_iter k P a)) is necessary because
+subtraction is under-specified.  The definition of subtraction makes
+no requirement on the subtraction of the initial value if it exists
+and is less than zero.
+
+This makes the subtraction of negative numbers open to different
+interpretations.  I think the following statement is about the
+strongest thing one can prove, but the pre-condition means that you
+can't use this theorem to find the value of a negative subtraction.
+*)
+
+Lemma pred_sub_safe:
+  forall k:nat, forall a b : t, pred_safe k a -> pred_safe k (b - (nat_iter k P a)) -> (b - (nat_iter k P a)) == nat_iter k S (b - a).
+Proof.
+  intros k a b H Hsub.
+
+  rewrite<- (succ_pred_safe _ _ H) at 2.
+  rewrite iter_sub_succ_r.
+  rewrite (succ_pred_safe _ _ Hsub).
+  reflexivity.
+Qed.
+
+Lemma sub_succ: 
+  forall a b : t, a>=0 -> (S b - S a) ==  (b - a).
+Proof.
+  intros a b H.
+  apply iter_succ_le in H.
+  destruct H as [ k H].
+  rewrite<- H.
   
+  rewrite sub_succ_r.
+  rewrite iter_sub_succ_r.
+  
+  rewrite iter_assoc.
+  rewrite sub_0_r.
+  rewrite pred_succ.
+  
+  rewrite iter_sub_succ_r.
+  rewrite sub_0_r.
+  reflexivity.
+Qed.
+ 
+Lemma sub_le_direct: 
+  forall a b : t, 0 <= a -> a <= b -> a + (b - a) == b.
+Proof.
+  intros a b H0 Hab.
+  apply le_exists_sub in Hab.
+  destruct Hab as [ p (Heq,Hp0)].
+  symmetry in Heq.
+  rewrite add_comm in Heq.
+  assert (Heq2 := (sub_le a b p H0 Heq)).
+  rewrite Heq2.
+  exact Heq.
+Qed.
 
+Lemma sub_succ_l: forall a b:t, 0 <= a -> a <= b -> S b - a == S (b - a).
+Proof.
+  intros a b Ha Hb.
+  apply iter_succ_le in Hb.
+  destruct Hb as [kb Hb].
 
+  apply iter_succ_le in Ha.
+  destruct Ha as [ka Ha].
+  rewrite<- Ha.
+  
+  rewrite iter_sub_succ_r.
+  rewrite sub_0_r.
+  rewrite iter_sub_succ_r.
+  rewrite sub_0_r.
+  
+  rewrite<- Ha in Hb.
+  rewrite<- nat_iter_plus in Hb.
+  rewrite Plus.plus_comm in Hb.
+  rewrite nat_iter_plus in Hb.
+  rewrite<- Hb.
+  rewrite iter_assoc.
+  rewrite iter_pred_succ.
+  rewrite iter_pred_succ.
+  reflexivity.
+Qed.
 
+Lemma sub_lt_gt0:
+  forall a b : t, 0 <= a -> a < b -> 0 < (b - a).
+Proof.
+  intros a b Ha Hb.
+  assert (Hax := iter_succ_le _ _ Ha).
+  destruct Hax as [k Hax].
+  assert (Hbx := iter_succ_lt _ _ Hb).
+  destruct Hbx as [m Hbx].
+  assert (m > 0%nat)%nat.
+  destruct m.
+  simpl in Hbx.
+  rewrite Hbx in Hb.
+  apply lt_irrefl in Hb.
+  contradiction.
+  apply Gt.gt_Sn_O.
+  rewrite<- Hax.
+  rewrite<- Hbx.
+  rewrite iter_sub_succ_r.
+  rewrite sub_0_r.
+  rewrite<- Hax.
+  rewrite<- nat_iter_plus.
+  rewrite Plus.plus_comm.
+  rewrite nat_iter_plus.
+  rewrite iter_pred_succ.
+  
+  apply iter_lt.
+  exact H.
+Qed.
 
-
-
-
+Lemma pow_succ_lt:
+  forall a b : t, a>1 -> b>=0 -> a^b < a^(S b).
+Proof.
+  intros a b Ha Hb.
+  rewrite pow_succ_r.
+  rewrite<- mul_1_l at 1.
+  apply mul_lt_mono_pos_r.
+  apply pow_pos_nonneg.
+  apply (lt_trans _ 1 _).
+  rewrite one_succ.
+  apply lt_succ_diag_r.
+  exact Ha.
+  exact Hb.
+  exact Ha.
+  exact Hb.
 Qed.
 
 Lemma log_exists:
     forall a:t,
-      a>0 -> exists k m:t, (a == n^k + m) /\ m < (n^(S k) - n^k).
+      a>0 -> exists k m:t, k>=0 /\ (a == n^k + m) /\ m < (n^(S k) - n^k).
 Proof.
   apply lt_ind.
   intros x y Hxy.
@@ -1084,6 +907,8 @@ Proof.
   (* Case a == 0 *)
   exists 0, 0.
   apply conj.
+  easy.
+  apply conj.
   assert (H0:= pow_0_r n).
   rewrite H0.
   rewrite add_0_r.
@@ -1106,7 +931,7 @@ Proof.
   (* Inductive case. *)
   intros m Hm IH.
   destruct IH as [k IH], IH as [m0].
-  destruct H as (L,R).
+  destruct H as (Hk,(L,R)).
   apply le_succ_l in R.
   apply lt_eq_cases in R.
   destruct R as [RL | RR].
@@ -1117,487 +942,145 @@ Proof.
   reflexivity.
 
   exists (S k), 0.
+
+  apply conj.
+  apply (le_le_succ_r _ _ Hk).
   apply conj.
   rewrite L.
   rewrite<- add_succ_r.
   rewrite RR.
+  rewrite add_0_r.
+  apply sub_le_direct.
+  apply (pow_nonneg _ _ n_ge0).
+  apply lt_le_incl.
+  apply (pow_succ_lt _ _ n_gt1 Hk).
 
+  apply sub_lt_gt0.
+  apply pow_nonneg.
+  apply n_ge0.
 
-
-
-
-  
-  assert (H: (S m0) <= (n ^ (S k) - n ^ k)).
-  
-
-  
-
+  apply (pow_succ_lt _ _ n_gt1).
+  apply (le_le_succ_r _ _ Hk).
 Qed.
 
 (** log n is exact on powers of n *)
 
 Lemma log_pown : forall a, 0<=a -> log n (n^a) == a.
 Proof.
+  intros a Ha.
+  
+  apply log_unique.
+  trivial.
+  split.
+  easy.
+  apply (pow_succ_lt _ _ n_gt1 Ha).
+Qed.
+
+Lemma log_pred_pown : forall a, 0<a -> log n (P (n^a)) == P a.
+Proof.
  intros a Ha.
- apply log_unique n with 0; trivial.
- split; order_pos. now nzsimpl.
+ assert (Ha' : S (P a) == a) by (now rewrite lt_succ_pred with 0).
+ apply log_unique.
+ apply lt_succ_r; order.
+ rewrite <-le_succ_l, <-lt_succ_r, Ha'.
+ rewrite lt_succ_pred with 0.
+ split; try easy. apply pow_lt_mono_r_iff; try order'.
+ apply n_gt1.
+ rewrite succ_lt_mono, Ha'. apply lt_succ_diag_r.
+ apply pow_pos_nonneg.
+ apply n_gt0.
+ order'.
+Qed.
+
+Lemma log_1 : log n 1 == 0.
+Proof.
+ rewrite <- (pow_0_r n). now apply log_pown.
+Qed.
+
+Lemma log_n : log n n == 1.
+Proof.
+ rewrite<- (pow_1_r n) at 2.
+ apply log_pown.
+ rewrite one_succ.
+ apply le_succ_diag_r.
+Qed.
+
+Lemma log_pos : forall a, n <= a -> 0 < log n a.
+Proof.
+  intros a Ha.
+  assert (Ha' : 0 < a).
+  apply (lt_le_trans _ n _). 
+  apply n_gt0.
+  exact Ha.
+  assert (H := log_nonneg a).
+  le_elim H.
+  trivial.
+
+  generalize (log_spec n a n_gt1 Ha'). 
+  rewrite <- H in *. nzsimpl; try order.
+  intros (H1,H2).
+  
+  apply nlt_ge in Ha.
+  apply Ha in H2.
+  contradiction.
+Qed.
+
+Lemma log_null : forall a, log n a == 0 <-> a < n.
+Proof.
+ intros a. split; intros H.
+
+ destruct (lt_ge_cases a n) as [Ha|Ha]; trivial.
+ generalize (log_pos a Ha); order.
+ assert (H2 := le_gt_cases a 0).
+ decompose [or] H2.
+ apply (log_nonpos _ _ n_gt1 H0).
+
+ apply log_unique.
+ order'.
+ rewrite pow_0_r.
+ rewrite pow_succ_r.
+ rewrite pow_0_r.
+ rewrite mul_1_r.
+ split.
+ rewrite one_succ.
+ apply le_succ_l.
+ exact H0.
+ exact H.
+ easy.
+Qed.
+
+Lemma log_le_mono : forall a b, a<=b -> log n a <= log n b.
+Proof.
+ intros a b H.
+ destruct (le_gt_cases a 0) as [Ha|Ha].
+ rewrite (log_nonpos _ _ n_gt1); order_pos.
+ assert (Hb : 0 < b) by order.
+ destruct (log_spec _ a n_gt1 Ha) as (LEa,_).
+ destruct (log_spec _ b n_gt1 Hb) as (_,LTb).
+ apply lt_succ_r.
+ apply (pow_lt_mono_r_iff n _ _ n_gt1).
+ order_pos.
+ order_pos.
 Qed.
 
 
-
-(* Stopped here *)
-
-
-
-
-
-
-
-
-
-
-
-
-
-induction a.
-lia.
-intro H0.
-assert (Hcases: a = 0 \/ a > 0).
-lia.
-decompose [or] Hcases.
-rewrite H in *.
-exists 0.
-exists 0.
-simpl.
-apply conj.
-auto.
-lia.
-
-(* Interesting case *)
-assert (IHa' := IHa H).
-destruct IHa' as [k'].
-destruct H1 as [m'].
-decompose [and] H1.
-clear H1.
-clear Hcases.
-assert (Hcases: ((S m') = b ^ (S k') - b ^ k') \/ (S m') < b ^ (S k') - b ^ k').
-lia.
-decompose [or] Hcases.
-exists (S k').
-exists 0.
-rewrite H2.
-apply conj.
-rewrite plus_n_Sm.
-rewrite H1.
-lia.
-simpl.
-assert (Hbase := base_gt1).
-rewrite mult_assoc.
-rewrite<- mult_minus_distr_r.
-apply Nat.mul_pos_pos.
-rewrite<- (mult_1_r b) at 3.
-rewrite<- mult_minus_distr_l.
-apply Nat.mul_pos_pos.
-lia.
-lia.
-apply (lt_le_trans _ 1 _).
-lia.
-rewrite<- (pow_0_r b).
-apply Nat.pow_le_mono_r_iff.
-exact Hb1.
-lia.
-
-exists (k'); exists (S m').
-apply conj.
-rewrite H2.
-lia.
-exact H1.
+Lemma log_lt_cancel : forall a b, log n a < log n b -> a < b.
+Proof.
+ intros a b H.
+ destruct (le_gt_cases b 0) as [Hb|Hb].
+  rewrite (log_nonpos n b n_gt1) in H; trivial.
+  generalize (log_nonneg a); order.
+ destruct (le_gt_cases a 0) as [Ha|Ha]. order.
+ destruct (log_spec n a n_gt1 Ha) as (_,LTa).
+ destruct (log_spec n b n_gt1 Hb) as (LEb,_).
+ apply le_succ_l in H.
+ apply (pow_le_mono_r_iff n _ _ n_gt1) in H; order_pos.
 Qed.
-
 
 End N.
 
 
 End NLogProp.
-
-Module Type N.
-  Parameter n:nat. 
-  Axiom base_gt1: n>1.
-End N.
-
-Module Type NLognSpec(Import A : N). 
-
-  Parameter logn : nat -> nat.
-
-  Axiom logn_spec: forall a, 0<a -> n^(logn a) <= a < n^(S (logn a)).
-  Axiom logn_0: logn 0 = 0.
-
-End NLognSpec.
-
-(* We need log3 not log2, so we just copy the standard library
-definition but generalize from 2 to n.  This code special-cases Nat
-but presumably would not be hard to generlize to Z as well. *) 
-
-Module NLogn(Import A : N).
-
-Lemma base_gt0: 0 < n.
-Proof.
-assert (H := base_gt1).
-lia.
-Qed.
-
-Lemma base_nonzero: n <> 0.
-Proof.
-  assert(H := base_gt1).
-  lia.
-Qed.
-
-Lemma mul_lt_r: 
-  forall a b :nat ,
-    a>0 -> b>1 -> a < b * a.
-Proof.
-  intros a b Ha Hb.
-  rewrite<- (mult_1_r a) at 1.
-  rewrite mult_comm at 1.
-  apply mult_lt_compat_r.
-  exact Hb.
-  exact Ha.
-Qed.
-
-Fixpoint logn_iter (k:nat) (a:nat) :=
-  match k with
-    | 0 => 0
-    | (S k') => 
-      match nat_compare (n^k') a with
-        | Eq => k'
-        | Lt => k'
-        | Gt => logn_iter k' a
-      end
-  end.
-
-Lemma logn_iter_basic: forall b k:nat, k > 0 -> b > k -> (logn_iter b (n^k)) = k.
-Proof.
-  intro b.
-  induction b.
-  simpl.
-  intro k.
-  lia.
-
-  intro k.
-  intros Hk Hb.
-  unfold logn_iter.
-  fold logn_iter.
-  remember (nat_compare (n ^ b) (n ^ k)) as w.
-  symmetry in Heqw.
-  
-  case w in *.
-  
-  (* = *)
-  apply nat_compare_eq_iff in Heqw.
-  apply (Nat.pow_inj_r n _ _ base_gt1 Heqw).
-
-  (* < *)
-  apply nat_compare_lt in Heqw.
-  apply Nat.pow_lt_mono_r_iff in Heqw.
-  lia.
-  apply base_gt1.
-  
-  (* > *)
-  apply nat_compare_gt in Heqw.
-  apply Nat.pow_lt_mono_r_iff in Heqw.
-  apply IHb.
-  exact Hk.
-  exact Heqw.
-  exact base_gt1.
-Qed.
-
-Lemma logn_iter_basic2: 
-  forall b k m:nat,
-    b > k -> m < (n ^ (S k) - n ^ k) -> (logn_iter b (n^k + m)) = k.
-Proof.
-  intro b.
-  induction b.
-  
-  simpl.
-  intros k m.
-  lia.
-  
-  intros k m Hb Hm.
-  unfold logn_iter; fold logn_iter.
-  remember (nat_compare _ _) as w.
-  symmetry in Heqw.
-
-  case w in *.
-
-  (* = *)
-  apply nat_compare_eq in Heqw.
-  assert (H: n^b < n^ (S k)).
-  lia.
-  apply Nat.pow_lt_mono_r_iff in H.
-  lia.
-  exact base_gt1.
-  
-  (* < *)
-  apply nat_compare_lt in Heqw.
-  assert (H: n^b < n ^ (S k)).
-  lia.
-  apply Nat.pow_lt_mono_r_iff in H.
-  lia.
-  exact base_gt1.
-
-  (* >= *)
-  apply nat_compare_gt in Heqw.
-  apply IHb.
-  assert (H : k = b \/ k < b).
-  lia.
-  decompose [or] H.
-  rewrite H0 in Heqw.
-  lia.
-  exact H0.
-  exact Hm.
-Qed.
-
-Lemma logn_exists:
-  forall b : nat, 
-    b>1 ->
-    forall a:nat,
-      a>0 -> exists k m:nat, (a = b^k + m) /\ m < (b^(S k) - b^k).
-Proof.
-intros b Hb1 a.
-induction a.
-lia.
-intro H0.
-assert (Hcases: a = 0 \/ a > 0).
-lia.
-decompose [or] Hcases.
-rewrite H in *.
-exists 0.
-exists 0.
-simpl.
-apply conj.
-auto.
-lia.
-
-(* Interesting case *)
-assert (IHa' := IHa H).
-destruct IHa' as [k'].
-destruct H1 as [m'].
-decompose [and] H1.
-clear H1.
-clear Hcases.
-assert (Hcases: ((S m') = b ^ (S k') - b ^ k') \/ (S m') < b ^ (S k') - b ^ k').
-lia.
-decompose [or] Hcases.
-exists (S k').
-exists 0.
-rewrite H2.
-apply conj.
-rewrite plus_n_Sm.
-rewrite H1.
-lia.
-simpl.
-assert (Hbase := base_gt1).
-rewrite mult_assoc.
-rewrite<- mult_minus_distr_r.
-apply Nat.mul_pos_pos.
-rewrite<- (mult_1_r b) at 3.
-rewrite<- mult_minus_distr_l.
-apply Nat.mul_pos_pos.
-lia.
-lia.
-apply (lt_le_trans _ 1 _).
-lia.
-rewrite<- (pow_0_r b).
-apply Nat.pow_le_mono_r_iff.
-exact Hb1.
-lia.
-
-exists (k'); exists (S m').
-apply conj.
-rewrite H2.
-lia.
-exact H1.
-Qed.
-
-Lemma mul_super_linear:
-  forall a b c : nat, a > 1 -> a * b < c -> b < c.
-Proof.
-  intros a b c Ha.
-  induction b.
-  lia.
-  intro H.
-  rewrite mult_succ_r in H.
-  assert (H2 : a * b < c).
-  lia.
-  assert (H3 := IHb H2).
-  assert (Hcases: (S b) = c \/ (S b) < c).
-  lia.
-  decompose [or] Hcases.
-  clear Hcases.
-  rewrite<- H0 in H.
-  replace (S b) with (b + 1) in H.
-  apply Nat.add_lt_cases in H.
-  decompose [or] H.
-  clear H.
-  case b in *.
-  lia.
-  rewrite<- H0 in H2.
-  replace (a * S b) with ((S b) + (pred a) * (S b)) in H2.
-  replace (S (S b)) with ((S b) + 1) in H2.
-  apply Nat.add_lt_mono_l in H2.
-  assert (Hpred: pred a > 0).
-  lia.
-  assert (Hblah: pred a * S b = 0).
-  lia.
-  apply mult_is_O in Hblah.
-  decompose [or] Hblah.
-  lia.
-  lia.
-  lia.
-  rewrite<- (mult_1_r (S b)) at 1.
-  rewrite mult_comm at 1.
-  rewrite<- mult_plus_distr_r.
-  replace (1 + pred a) with a.
-  reflexivity.
-  lia.
-  lia.
-  lia.
-  lia.
-Qed.
-
-Lemma pow_super_linear:
-  forall a b c : nat, a>1 -> a^b < c -> b < c.
-Proof.
-intros a b c Ha.
-induction b.
-lia.
-simpl.
-intro Hab.
-
-assert (H := mul_super_linear _ _ _ Ha Hab).
-assert (H2 := IHb H).
-
-case c in *.
-lia.
-apply lt_n_S.
-
-assert (Hcases: b < c \/ b = c).
-lia.
-decompose [or] Hcases.
-exact H0.
-
-rewrite<- H0 in Hab.
-assert (Hx:= Nat.pow_gt_lin_r a (S b) Ha).
-simpl in Hx.
-lia.
-Qed.
-
-Lemma logn_iter_spec: 
-  forall k a:nat, 
-    a > 0 -> k > a -> 
-    n^(logn_iter k a) <= a < n^(S (logn_iter k a)).
-Proof.
-  intros k a Ha Hk.
-  assert (H := logn_exists n base_gt1 a Ha).
-  destruct H as [k'].
-  destruct H as [m'].
-  decompose [and] H.
-  
-  remember (logn_iter k a) as logn_a.
-  rewrite H0 in Heqlogn_a.
-  rewrite logn_iter_basic2 in Heqlogn_a.
-  rewrite Heqlogn_a.
-  lia.
-  rewrite H0 in Hk.
-  
-  replace k with (k + 0) in Hk.
-  apply Nat.add_lt_cases in Hk.
-  decompose [or] Hk.
-  apply pow_super_linear in H2.
-  exact H2.
-  exact base_gt1.
-  lia.
-  lia.
-  exact H1.
-Qed.
-
-Definition logn a:nat := logn_iter (S a) a.
-
-Lemma logn_spec: 
-  forall a:nat, a > 0 -> n^(logn a) <= a < n^(S (logn a)).
-Proof.
-  intros a Ha.
-  unfold logn.
-  assert (H: S a > a).
-  lia.
-  apply (logn_iter_spec (S a) a Ha H).
-Qed.
-
-Lemma le_div_mul :
-  forall s p q :nat, s>0 -> p <= q/s -> s*p <= q.
-Proof.
-intros s p q H0 H.
-apply (le_trans _ (s * (q/s)) _).
-apply mult_le_compat_l.
-exact H.
-apply Nat.mul_div_le.
-lia.
-Qed.
-
-(* 
-   
-*)
-Lemma lt_div_mul : 
-  forall s p q :nat, s>0 -> p/s < q -> p < s*(S q).
-Proof.
-intros s p q H0 H.
-rewrite mult_succ_r.
-rewrite (div_mod p s).
-apply plus_lt_compat.
-apply mult_lt_compat_l.
-exact H.
-exact H0.
-apply Nat.mod_upper_bound.
-lia.
-lia.
-Qed.
-
-Lemma lt_div_mul_r :
-  forall s p q r : nat,
-    s>0 -> r > q -> p/s < q -> p < s * r.
-Proof.
-  intros s p q r Hs Hr Hp.
-  apply (lt_le_trans _ (s * (S q)) _).
-  apply lt_div_mul.
-  exact Hs.
-  exact Hp.
-  apply mult_le_compat_l.
-  lia.
-Qed.
-
-Lemma le_lt_div_mul : 
-  forall s p q t r: nat,
-    s>0 ->
-    r > t ->
-    p <= q/s < t ->
-    s*p <= q < s*r.
-Proof.
-intros s p q t r H0 Hr H.
-decompose [and] H.
-clear H.
-apply conj.
-apply le_div_mul.
-exact H0.
-exact H1.
-apply (lt_div_mul_r s q t r).
-exact H0.
-
-lia.
-exact H2.
-Qed.
-
-End NLogn.
-
 
 (* Local Variables: *)
 (* coq-prog-name: "/usr/local/bin/coqtop" *)
