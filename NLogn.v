@@ -1077,6 +1077,272 @@ Proof.
  apply (pow_le_mono_r_iff n _ _ n_gt1) in H; order_pos.
 Qed.
 
+
+Lemma log_le_pown : forall a b, 0<a -> (n^b<=a <-> b <= log n a).
+Proof.
+ intros a b Ha.
+ split; intros H.
+ destruct (lt_ge_cases b 0) as [Hb|Hb].
+ generalize (log_nonneg a); order.
+ rewrite <- (log_pown b); trivial. now apply log_le_mono.
+ transitivity (n^(log n a)).
+ apply pow_le_mono_r.
+ apply n_gt0.
+ order'.
+ now destruct (log_spec n a n_gt1 Ha).
+Qed.
+
+Lemma log_lt_pown : forall a b, 0<a -> (a<n^b <-> log n a < b).
+Proof.
+ intros a b Ha.
+ split; intros H.
+ destruct (lt_ge_cases b 0) as [Hb|Hb].
+ rewrite pow_neg_r in H; order.
+ apply (pow_lt_mono_r_iff n _ _ n_gt1); try order_pos.
+ apply le_lt_trans with a; trivial.
+ now destruct (log_spec n a n_gt1 Ha).
+ destruct (lt_ge_cases b 0) as [Hb|Hb].
+ generalize (log_nonneg a); order.
+ apply log_lt_cancel; try order.
+ rewrite log_pown.
+ exact H.
+ exact Hb.
+Qed.
+
+Lemma log_lt_lin : forall a, 0<a -> log n a < a.
+Proof.
+ intros a Ha.
+ apply (pow_lt_mono_r_iff n _ _ n_gt1); try order_pos.
+ apply le_lt_trans with a.
+ now destruct (log_spec n a n_gt1 Ha).
+ apply pow_gt_lin_r.
+ apply n_gt1.
+ order'.
+Qed.
+
+Lemma log_le_lin : forall a, 0<=a -> log n a <= a.
+Proof.
+ intros a Ha.
+ le_elim Ha.
+ now apply lt_le_incl, log_lt_lin.
+ rewrite <- Ha, log_nonpos.
+ easy.
+ apply n_gt1.
+ order.
+Qed.
+
+(** Log and multiplication. *)
+
+(** Due to rounding error, we don't have the usual
+    [log n (a*b) = log n a + log n b] but we may be off by 1 at most *)
+
+Lemma log_mul_below : forall a b, 0<a -> 0<b ->
+ log n a + log n b <= log n (a*b).
+Proof.
+ intros a b Ha Hb.
+ apply log_le_pown; try order_pos.
+ rewrite pow_add_r by order_pos.
+ apply mul_le_mono_nonneg.
+ apply pow_nonneg.
+ apply n_ge0.
+ 
+ apply (log_spec n a n_gt1).
+ exact Ha.
+
+ apply pow_nonneg.
+ apply n_ge0.
+ apply (log_spec n b n_gt1).
+ exact Hb.
+Qed.
+
+Lemma log_mul_above : forall a b, 0<=a -> 0<=b ->
+ log n (a*b) <= log n a + log n b + 1.
+Proof.
+ intros a b Ha Hb.
+ le_elim Ha.
+ le_elim Hb.
+ apply lt_succ_r.
+ rewrite add_1_r, <- add_succ_r, <- add_succ_l.
+ apply log_lt_pown; try order_pos.
+ rewrite pow_add_r by order_pos.
+ apply mul_lt_mono_nonneg; try order; now apply (log_spec n _ n_gt1).
+ rewrite <- Hb. nzsimpl. rewrite log_nonpos.
+ apply le_le_succ_r.
+ rewrite add_0_r.
+ apply log_nonneg.
+ apply n_gt1.
+ easy.
+ rewrite <- Ha.
+ nzsimpl. 
+rewrite (log_nonpos n 0 n_gt1); order_pos.
+Qed.
+
+Lemma log_mul_pown : forall a b, 0<a -> 0<=b -> log n (a*n^b) == b + log n a.
+Proof.
+  intros a b Ha Hb.
+  apply log_unique; try order_pos. 
+  split.
+  rewrite pow_add_r, mul_comm; try order_pos.
+  apply mul_le_mono_nonneg_r. 
+  apply (pow_nonneg _ _ n_ge0). 
+  now apply (log_spec n _ n_gt1).
+  rewrite <-add_succ_r, pow_add_r, mul_comm; try order_pos.
+  apply mul_lt_mono_pos_l. 
+  apply (pow_pos_nonneg _ _ n_gt0 Hb).
+  now apply (log_spec n _ n_gt1).
+Qed.
+
+Lemma log_muln : forall a, 0<a -> log n (n*a) == S (log n a).
+Proof.
+ intros a Ha. 
+ generalize (log_mul_pown a 1 Ha le_0_1). 
+ rewrite pow_1_r.
+ rewrite add_1_l.
+ rewrite mul_comm.
+ firstorder.
+Qed.
+
+(** Two numbers with same log n cannot be far away. *)
+
+Lemma log_same : forall a b, 0<a -> 0<b -> log n a == log n b -> a < n*b.
+Proof.
+ intros a b Ha Hb H.
+ apply log_lt_cancel. rewrite log_muln, H by trivial.
+ apply lt_succ_diag_r.
+Qed.
+
+Lemma log_succ_le : forall a, log n (S a) <= S (log n a).
+Proof.
+ intros a.
+ destruct (lt_trichotomy 0 a) as [LT|[EQ|LT]].
+ apply (pow_le_mono_r_iff n _ _ n_gt1); try order_pos.
+ transitivity (S a).
+ apply (log_spec n _ n_gt1).
+ apply lt_succ_r; order.
+ now apply le_succ_l, (log_spec n _ n_gt1).
+ rewrite <- EQ, <- one_succ, log_1; order_pos.
+ rewrite (log_nonpos n a n_gt1). 
+ rewrite (log_nonpos n (S a) n_gt1).
+ order_pos.
+ now rewrite le_succ_l.
+ order_pos.
+Qed.
+
+Lemma log_succ_or : forall a,
+ log n (S a) == S (log n a) \/ log n (S a) == log n a.
+Proof.
+ intros.
+ destruct (le_gt_cases (log n (S a)) (log n a)) as [H|H].
+ right. generalize (log_le_mono _ _ (le_succ_diag_r a)); order.
+ left. apply le_succ_l in H. generalize (log_succ_le a); order.
+Qed.
+
+Lemma log_eq_succ_is_pown : forall a,
+ log n (S a) == S (log n a) -> exists b, S a == n^b.
+Proof.
+ intros a H.
+ destruct (le_gt_cases a 0) as [Ha|Ha].
+ 
+ assert (Hn := n_gt1).
+ rewrite 2 (proj2 (log_null _)) in H. 
+ generalize (lt_succ_diag_r 0); order.
+ order'. 
+ assert (Ha2 : S a <= 1).
+ rewrite one_succ.
+ apply ((proj1 (succ_le_mono _ _)) Ha).
+ order.
+
+ assert (Ha' : 0 < S a) by (apply lt_succ_r; order).
+ exists (log n (S a)).
+ generalize (proj1 (log_spec n (S a) n_gt1 Ha')) (proj2 (log_spec n a n_gt1 Ha)).
+ rewrite <- le_succ_l, <- H. order.
+Qed.
+
+Lemma log_eq_succ_iff_powb : forall a, 0<a ->
+ (log n (S a) == S (log n a) <-> exists b, S a == n^b).
+Proof.
+ intros a Ha.
+ split. apply log_eq_succ_is_pown.
+ intros (b,Hb).
+ assert (Hb' : 0 < b).
+  apply (pow_gt_1 n _ n_gt1); try order'; now rewrite <- Hb, one_succ, <- succ_lt_mono.
+ rewrite Hb, log_pown; try order'.
+ setoid_replace a with (P (n^b)). rewrite log_pred_pown; trivial.
+ symmetry; now apply lt_succ_pred with 0.
+ apply succ_inj. rewrite Hb. symmetry. apply lt_succ_pred with 0.
+  rewrite <- Hb, lt_succ_r; order.
+Qed.
+
+Lemma mul_n_mono_l:
+  forall a b : t, a < b -> 1 + n * a < n * b.
+Proof.
+  intros a b Hab.
+  apply le_succ_l in Hab.
+  apply (lt_le_trans _ (n * S a) _).
+  rewrite mul_succ_r; rewrite add_comm; apply add_lt_mono_l.
+  apply n_gt1.
+  apply (mul_le_mono_nonneg_l _ _ _ n_ge0).
+  exact Hab.
+Qed.
+
+Lemma log_succ_muln : forall a, 0<a -> log n (n*a+1) == S (log n a).
+Proof.
+  intros a Ha.
+  rewrite add_1_r.
+  destruct (log_succ_or (n*a)) as [H|H]; [exfalso|now rewrite H, log_muln].
+  apply log_eq_succ_is_pown in H. destruct H as (b,H).
+  destruct (lt_trichotomy b 0) as [LT|[EQ|LT]].
+  rewrite pow_neg_r in H; trivial.
+  apply (mul_pos_pos n), succ_lt_mono in Ha; try order'.
+  rewrite <- one_succ in Ha. order'.
+  apply n_gt0.
+  rewrite EQ, pow_0_r in H.
+  apply (mul_pos_pos n _ n_gt0), succ_lt_mono in Ha; try order'.
+  rewrite <- one_succ in Ha. order'.
+  assert (EQ:=lt_succ_pred 0 b LT).
+  rewrite <- EQ, pow_succ_r in H; [|now rewrite <- lt_succ_r, EQ].
+  destruct (lt_ge_cases a (n^(P b))) as [LT'|LE'].
+  generalize (mul_n_mono_l _ _ LT'). rewrite add_1_l. order.
+  rewrite (mul_le_mono_pos_l _ _ n) in LE'; try order'.
+  rewrite <- H in LE'. apply le_succ_l in LE'. order.
+  apply n_gt0.
+Qed.
+
+(** Log and addition *)
+
+(* The proof for log_add_le needs to be rethought.  The reliance on
+the value two is too strong. *)
+
+Lemma log_add_le : forall a b, a~=1 -> b~=1 -> log n (a+b) <= log n a + log n b.
+Proof.
+ intros a b Ha Hb.
+ destruct (lt_trichotomy a 1) as [Ha'|[Ha'|Ha']]; [|order|].
+ rewrite one_succ, lt_succ_r in Ha'.
+ rewrite (log_nonpos _ a n_gt1); trivial. nzsimpl. apply log_le_mono.
+ rewrite <- (add_0_l b) at 2. now apply add_le_mono.
+ destruct (lt_trichotomy b 1) as [Hb'|[Hb'|Hb']]; [|order|].
+ rewrite one_succ, lt_succ_r in Hb'.
+ rewrite (log_nonpos n b n_gt1); trivial. nzsimpl. apply log_le_mono.
+ rewrite <- (add_0_r a) at 2. now apply add_le_mono.
+ clear Ha Hb.
+ apply lt_succ_r.
+ apply log_lt_pown; try order_pos.
+ rewrite pow_succ_r by order_pos.
+ apply (lt_le_trans _ (2 * n ^ (log n a + log n b)) _).
+ rewrite two_succ, one_succ at 1. nzsimpl.
+ apply add_lt_mono.
+
+ apply lt_le_trans with (n^(S (log n a))). apply (log_spec _ _ n_gt1); order'.
+ apply pow_le_mono_r. apply n_gt0. rewrite <- add_1_r. apply add_le_mono_l.
+ rewrite one_succ.
+ now apply le_succ_l, log_pos.
+ apply lt_le_trans with (n^(S (log n b))). apply log_spec; order'.
+ apply pow_le_mono_r. order'. rewrite <- add_1_l. apply add_le_mono_r.
+  rewrite one_succ; now apply le_succ_l, log_pos.
+Qed.
+
+
+
 End N.
 
 
