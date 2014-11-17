@@ -4510,5 +4510,5 @@ Qed.
 End Scales.
 (* Local Variables: *)
 (* coq-prog-name: "/usr/local/bin/coqtop" *)
-(* coq-load-path: ("/Users/fsmith/Documents/coq-proofs") *)
+(* coq-load-path: ("/Users/Fred/Documents/proofs/scales") *)
 (* End: *)
