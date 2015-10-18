@@ -4455,57 +4455,436 @@ Qed.
 
 Require Import NLogn.
 
-Lemma pnCost:
-  forall n:nat, (procCost (pn (3^n)) = n).
+Eval cbv in List.map (fun x=> procCost (pn x)) [0;1;2;3;4;5;6;7;8;9;10;11;12].
+
+Lemma pnCostPow3:
+  forall n:nat, procCost (pn (3^n)) = n.
 Proof.
-intro n.
-remember (3^n) as k.
-functional induction (pn k).
-symmetry in Heqk.
-apply Nat.pow_eq_0_iff in Heqk.
+  intro n. 
+  induction n.
+  simpl; reflexivity.
+  replace (3 ^ (S n)) with (3 * (3 ^ n)).
+  remember (3 * 3 ^ n) as k.
+  assert (Hduh : 3 ^ n > 0).
+  assert (Hyep := Nat.pow_nonzero 3 n).
+  lia.
+  functional induction (pn k).
+  lia.
+  lia.
+  lia.
+  unfold procCost; fold procCost.
+  replace (3 * 3 ^ n / 3) with (3 ^ n).
+  replace (3 * (3 ^ n) mod 3) with 0.
+  replace (3 ^ n + 0) with (3 ^ n).
+  rewrite Max.max_idempotent.
+  rewrite Max.max_idempotent.
+  rewrite IHn.
+  lia.
+  lia.
+  rewrite mult_comm.
+  rewrite Nat.mod_mul.
+  lia.
+  lia.
+  rewrite mult_comm.
+  rewrite Nat.div_mul.
+  reflexivity.
+  lia.
+  rewrite pow_succ_r.
+  reflexivity.
+  lia.
+Qed.
+
+(* Oh sad day, our definition for pn above is not optimal.  We must redo the argument
+with a more sophisticated pn. *)
+
+Lemma weigh_exactlyn: 
+  forall L1 L2 L3 : coins, 
+    length L1 = length L2 -> 
+    exactlyn 1 ((L1 ++ L2) ++ L3) ->
+    match weigh (length L1) ((L1 ++ L2) ++ L3) with
+      | Lt => exactlyn 1 L1
+      | Eq => exactlyn 1 L3
+      | Gt => exactlyn 1 L2
+    end.
+Proof.
+intros L1 L2 L3 Hlen Hex.
+
+assert (H1 := (exactlyn_app_rev 1 _ Hex (L1++L2) L3)).
+destruct H1 as [n1].
+reflexivity.
+destruct H as [n2].
+decompose [and] H.
+clear H.
+assert (Hex2 := (exactlyn_app_rev n1 _ H0 L1 L2)).
+destruct Hex2 as [n3].
+reflexivity.
+destruct H as [n4].
+decompose [and] H.
+clear H.
+assert (Hlen2: length L1 + length L1 <= length (L1 ++ L2)).
+rewrite app_length.
 lia.
-simpl.
-case n in *.
-reflexivity.simpl.
-rewrite pow_succ_r in Heqk.
-symmetry in Heqk.
-apply mult_is_one in Heqk.
+rewrite<- (weigh_tl (length L1) (L1 ++ L2) L3 Hlen2).
+symmetry in Hlen.
+assert (Hduh : length L1 = length L1).
+reflexivity.
+rewrite (weigh_defn (length L1) L1 L2 Hduh Hlen n3 n4 H1 H5).
+
+(* Now we have reduced this to a nat_compare problem. *)
+remember (nat_compare n4 n3) as R.
+symmetry in HeqR.
+
+destruct R.
+rewrite H6 in H3.
+
+apply nat_compare_eq_iff in HeqR.
+
+assert (H: n2 = 1).
+lia.
+rewrite H in H2.
+exact H2.
+
+apply nat_compare_lt in HeqR.
+assert (H: n3 = 1).
+lia.
+rewrite H in H1.
+exact H1.
+
+apply nat_compare_gt in HeqR.
+assert (H: n4 = 1).
+lia.
+rewrite H in H5.
+exact H5.
+Qed.
+
+(* To simplify our lives, lets try to make a higher-order function for
+   the basic idea.  So to apply divide and conquer we assume that we
+   have a working procedure "f" for any length list.  Then weigh the
+   first "dw" coins against the next "dw" coins with "drest" leftover.
+   The proc_split procedure defines a simple decision tree.  If
+   they're less, the fake is in the first group and apply "f" to it.
+   If they are equal, then the fake is in the remainder.  And if they
+   are greater apply "f" to the second group of d coins.  *)
+
+Definition proc_split (pdw pdrest : proc) :=
+  let dw := procDepth pdw in
+  let drest := procDepth pdrest in
+  (Weigh dw 
+         pdw
+         (Swap (dw + dw) drest pdrest) 
+         (Swap dw dw pdw)).
+
+Lemma proc_split_depth: 
+  forall pdw pdrest : proc, 
+  let dw := procDepth pdw in
+  let drest := procDepth pdrest in
+    procDepth (proc_split pdw pdrest) = dw + dw + drest.
+Proof.
+  intros pdw pdrest dw drest.
+  unfold proc_split.
+  simpl.
+  fold dw.
+  fold drest.
+  rewrite max_plus.
+  lia.
+Qed.
+
+Lemma exactlyn1_len:
+  forall L : coins, exactlyn 1 L -> length L > 0.
+Proof.
+  intros L H.
+  apply exactlyn_len in H.
+  lia.
+Qed.
+
+Lemma proc_split_lt_gt:
+  forall p:proc, forall L1 L2 L3 : coins,
+    procWorks p -> 
+    procDepth p = length L1 -> 
+    exactlyn 1 L1 ->
+    hd gold (procEval p ((L1 ++ L2) ++ L3)) = fake.
+Proof.
+  intros p L1 L2 L3 Hp Hdepth Hexact.
+
+  assert (Hduh: procDepth p <= length (L1 ++ L2)).
+  rewrite Hdepth.
+  rewrite app_length.
+  lia.
+
+  rewrite (procDepth_tl p (L1 ++ L2) L3 Hduh).
+  assert (Hlen4: length (procEval p (L1 ++ L2)) > 0).
+  apply exactlyn1_len in Hexact.
+  rewrite<- (procEval_length p (L1 ++ L2)).
+  rewrite app_length.
+  lia.
+
+  rewrite (hd_app _ _ _ _ Hlen4).
+  
+  assert (Hlen5: length (procEval p L1) > 0).
+  apply exactlyn1_len in Hexact.
+  rewrite<- (procEval_length p L1).
+  lia.
+  
+  assert (Hduh2: procDepth p <= length L1).
+  lia.
+
+  rewrite (procDepth_tl p L1 L2 Hduh2).
+
+  rewrite (hd_app _ _ _ _ Hlen5).
+  apply Hp.
+  lia.
+  exact Hexact.
+Qed.
+
+Lemma proc_split_works: 
+  forall pdw pdrest :proc,
+    (procWorks pdw) -> 
+    (procWorks pdrest) ->
+    (procWorks (proc_split pdw pdrest)).
+Proof.
+  intros pdw pdrest Hdw Hdrest.
+  unfold procWorks.
+  intros L Hlen Hexact.
+  rewrite proc_split_depth in Hlen.
+  unfold proc_split.
+  unfold procEval.
+  fold procEval.
+  set (dw := procDepth pdw).
+  set (drest := procDepth pdrest).
+  assert (HL := (list_split _ L (dw + dw) drest Hlen)).
+  destruct HL as [Lx].
+  destruct H as [L3].
+  decompose [and] H.
+  clear H.
+  assert (HL2 := (list_split _ Lx dw dw H0)).
+  destruct HL2 as [L1].
+  destruct H as [L2].
+  decompose [and] H.
+  clear H.
+  rewrite H6 in H3.
+  rewrite H3 in *.
+  rewrite<- H1 at 1.
+  rewrite<- H5 in H1.
+  assert (Hw := (weigh_exactlyn L1 L2 L3 H1 Hexact)).
+
+
+  remember (weigh (length L1) ((L1 ++ L2) ++ L3)) as ww.
+  destruct ww.
+
+  (* case Eq *)
+  rewrite<- H6.
+  rewrite<- H0.
+  rewrite<- H2.
+  rewrite (swap_app _ Lx L3).
+  
+  assert (Hduh: procDepth pdrest <= length L3).
+  fold drest.
+  lia.
+  rewrite (procDepth_tl pdrest L3 Lx Hduh).
+  assert (Hlen3 : length (procEval pdrest L3) > 0).
+  apply exactlyn1_len in Hw.
+  rewrite<- (procEval_length pdrest L3).
+  lia.
+  rewrite (hd_app _ _ Lx _ Hlen3).
+  apply Hdrest.
+  fold drest.
+  exact H2.
+  exact Hw.
+  
+  (* case Lt *)
+  apply proc_split_lt_gt.
+  auto.
+  fold dw; rewrite<- H5; rewrite <- H1.
+  reflexivity.
+  exact Hw.
+
+  (* case Gt *)
+  assert (Hlen1 : dw + dw <= length (L1 ++ L2)).
+  rewrite H6 in H0.
+  rewrite H0.
+  lia.
+
+  rewrite (swap_tl _ (L1 ++ L2) L3 _ _ Hlen1).
+  
+  rewrite<- H5.
+  rewrite<- H1 at 1.
+  rewrite (swap_app _ L1 L2).
+
+  apply proc_split_lt_gt.
+  exact Hdw.
+  fold dw.
+  rewrite H5.
+  reflexivity.
+
+  exact Hw.
+Qed.
+                                                               
+Lemma mul_div_mod_lt:
+  forall n z k,
+    z>1 -> n >= z -> k <= n mod z -> (n/z + k) < n.
+Proof.
+intros n z k Hz Hn Hk.
+assert (H1 : n/z + k <= n/z + n mod z).
+lia.
+apply (le_lt_trans _ (n/z + n mod z)).
+exact H1.
+apply (lt_le_trans _ ((z-1)*(n/z) + (n/z + n mod z)) _).
+apply Nat.lt_add_pos_l.
+apply Nat.mul_pos_pos.
+lia.
+apply Nat.div_str_pos.
+lia.
+
+rewrite plus_assoc.
+rewrite<- mult_succ_l.
+rewrite<- Nat.add_1_r.
+rewrite Nat.sub_add.
+rewrite<- div_mod.
 lia.
 lia.
-simpl.
-case n in *.
-simpl in Heqk.
 lia.
-rewrite pow_succ_r in Heqk.
-symmetry in Heqk.
-rewrite (div_mod (3 * 3^n) 3) in Heqk.
-rewrite (div_mod 2 3) in Heqk at 8.
-rewrite (mult_comm 3 (3 ^ n)) in Heqk.
-rewrite Nat.mod_mul in Heqk.
-rewrite Nat.div_mul in Heqk.
-simpl in Heqk.
+Qed.
+
+Function pn2 (n:nat) {measure (fun x => n ) n } :=
+  match n with
+    | 0 => Stop
+    | 1 => (Swap 0 1 Stop)  (* This hack makes the procDepth uniform. *)
+    | 2 => (Weigh 1 Stop Stop (Swap 1 1 Stop))
+    | k => 
+      (let d := k/3 in
+       match k mod 3 with
+         | 2 =>  proc_split (pn2 (d+1)) (pn2 d)
+         | m =>  proc_split (pn2 d) (pn2 (d+m))
+       end)
+  end.
+
+(* case *)
+intros n n0 n1 n2 Hn1 Hn0 Hn Hn2.
+rewrite<- Hn.
+apply mul_div_mod_lt.
 lia.
+lia.
+lia.
+
+(* case *)
+intros n n0 n1 n2 Hn1 Hn0 Hn Hn2.
+rewrite<- Hn.
+rewrite<- (plus_0_r (n/3)).
+apply mul_div_mod_lt.
+lia.
+lia.
+lia.
+
+(* case *)
+intros n n0 n1 n2 Hn1 Hn0 Hn n3 Hn3 Hn2.
+apply mul_div_mod_lt.
+lia.
+lia.
+lia.
+
+(* case *)
+intros n n0 n1 n2 Hn1 Hn0 Hn n3 Hn3 Hn2.
+rewrite<- Hn.
+rewrite<- (plus_0_r (n/3)).
+apply mul_div_mod_lt.
+lia.
+lia.
+lia.
+
+(* case *)
+intros n n0 n1 n2 Hn1 Hn0 Hn n3 n4 Hn4 Hn3 Hn2.
+rewrite<- Hn.
+rewrite<- (plus_0_r (n/3)).
+apply mul_div_mod_lt.
+lia.
+lia.
+lia.
+
+(* case *)
+intros n n0 n1 n2 Hn1 Hn0 Hn n3 n4 Hn4 Hn3 Hn2.
+apply mul_div_mod_lt.
+lia.
+lia.
+lia.
+
+(* case *)
+intros n n0 n1 n2 Hn1 Hn0 Hn n3 n4 n5 Hn4 Hn3 Hn2.
+apply mul_div_mod_lt.
+lia.
+lia.
+lia.
+
+(* case *)
+intros n n0 n1 n2 Hn1 Hn0 Hn n3 n4 n5 Hn4 Hn5 Hn2.
+rewrite<- Hn.
+rewrite<- (plus_0_r (n/3)).
+apply mul_div_mod_lt.
+lia.
+lia.
+lia.
+Defined.
+
+Lemma plus_eq_self_r:
+  forall m n:nat, n + m = m -> n = 0.
+Proof.
+  intros m n H.
+  lia.
+Qed.
+
+Lemma pn2_depth:
+  forall n:nat, procDepth (pn2 n) = n.
+Proof.
+intros n.
+
+functional induction (pn2 n).
+simpl; lia.
+simpl; lia.
+simpl; lia.
+
+assert (Hez :  n / 3 + 1 + (n / 3 + 1) + n / 3 = 3 * (n/3) + 2).
+lia.
+
+rewrite proc_split_depth.
+rewrite IHp.
+rewrite IHp0.
+rewrite Hez.
+rewrite<- e0 at 3.
+symmetry.
+apply div_mod.
+lia.
+
+
+rewrite proc_split_depth.
+rewrite IHp.
+rewrite IHp0.
+
+assert (Hez :  n / 3 + n / 3 + (n / 3 + n mod 3) = 3 * (n/3) + n mod 3).
+lia.
+rewrite Hez.
+rewrite<- div_mod.
 auto.
 auto.
-auto.
-lia.
-lia.
-unfold procCost.
-fold procCost.
+Qed.
 
+Lemma pn2Works:
+  forall n:nat, procWorks (pn2 n).
+Proof.
+  intro n.
+  functional induction (pn2 n).
 
+  (* Case 0 *)
+  unfold procWorks.
+  simpl.
+  intros L Hlen Hexact.
+  apply exactlyn1_len in Hexact.
+  lia.
 
-
-
-
+  (* Case 1 *).
+  unfold procWorks.
 
 
 
 Qed.
-
-
-
-
 
 End Scales.
 (* Local Variables: *)
