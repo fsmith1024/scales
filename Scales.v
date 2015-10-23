@@ -159,7 +159,7 @@ end.
 
 (** * Properties of Interest *)
 
-(* Count the number of uses of a scale in a procedure. *)
+(** Count the number of uses of a scale in a procedure. *)
 Fixpoint procCost (p:proc) : nat :=
   match p with
   | Stop => 0
@@ -167,7 +167,7 @@ Fixpoint procCost (p:proc) : nat :=
   | Weigh _  p1 p2 p3 => 1 + max (procCost p1) (max (procCost p2) (procCost p3))
   end.
 
-(* Maximum size stack this program can observe. *)
+(** Maximum size stack this program can observe. *)
 Fixpoint procDepth (p:proc) : nat :=
   (match p with 
   | Stop => 0
