@@ -4453,8 +4453,6 @@ rewrite app_length.
 lia.
 Qed.
 
-Require Import NLogn.
-
 Eval cbv in List.map (fun x=> procCost (pn x)) [0;1;2;3;4;5;6;7;8;9;10;11;12].
 
 Lemma pnCostPow3:
@@ -4749,7 +4747,7 @@ Function pn2 (n:nat) {measure (fun x => n ) n } :=
   match n with
     | 0 => Stop
     | 1 => (Swap 0 1 Stop)  (* This hack makes the procDepth uniform. *)
-    | 2 => (Weigh 1 Stop Stop (Swap 1 1 Stop))
+(*     | 2 => (Weigh 1 Stop Stop (Swap 1 1 Stop)) *)
     | k => 
       (let d := k/3 in
        match k mod 3 with
@@ -4759,63 +4757,88 @@ Function pn2 (n:nat) {measure (fun x => n ) n } :=
   end.
 
 (* case *)
-intros n n0 n1 n2 Hn1 Hn0 Hn Hn2.
+intros n n0 n1 Hn0 Hn Hn1.
 rewrite<- Hn.
 apply mul_div_mod_lt.
 lia.
-lia.
-lia.
-
-(* case *)
-intros n n0 n1 n2 Hn1 Hn0 Hn Hn2.
-rewrite<- Hn.
-rewrite<- (plus_0_r (n/3)).
-apply mul_div_mod_lt.
+destruct n1.
+simpl in Hn1.
 lia.
 lia.
 lia.
 
 (* case *)
-intros n n0 n1 n2 Hn1 Hn0 Hn n3 Hn3 Hn2.
-apply mul_div_mod_lt.
-lia.
-lia.
-lia.
-
-(* case *)
-intros n n0 n1 n2 Hn1 Hn0 Hn n3 Hn3 Hn2.
+intros n n0 n1 Hn0 Hn Hn1.
 rewrite<- Hn.
 rewrite<- (plus_0_r (n/3)).
 apply mul_div_mod_lt.
 lia.
+destruct n1.
+simpl in Hn1.
+lia.
 lia.
 lia.
 
 (* case *)
-intros n n0 n1 n2 Hn1 Hn0 Hn n3 n4 Hn4 Hn3 Hn2.
+intros n n0 n1 Hn0 Hn n2 Hn2 Hn1.
+apply mul_div_mod_lt.
+lia.
+destruct n1.
+simpl in Hn1.
+lia.
+lia.
+lia.
+
+(* case *)
+intros n n0 n1 Hn0 Hn n2 Hn2 Hn1.
 rewrite<- Hn.
 rewrite<- (plus_0_r (n/3)).
 apply mul_div_mod_lt.
 lia.
+destruct n1.
+simpl in Hn1.
+lia.
 lia.
 lia.
 
 (* case *)
-intros n n0 n1 n2 Hn1 Hn0 Hn n3 n4 Hn4 Hn3 Hn2.
+intros n n0 n1 Hn0 Hn n2 n3 Hn3 Hn2 Hn1.
+rewrite<- Hn.
+rewrite<- (plus_0_r (n/3)).
+destruct n1.
+rewrite Hn.
+simpl.
+lia.
 apply mul_div_mod_lt.
 lia.
 lia.
 lia.
 
 (* case *)
-intros n n0 n1 n2 Hn1 Hn0 Hn n3 n4 n5 Hn4 Hn3 Hn2.
+intros n n0 n1 Hn0 Hn n2 n3 Hn3 Hn2 Hn1.
+destruct n1.
+simpl.
+lia.
 apply mul_div_mod_lt.
 lia.
 lia.
 lia.
 
 (* case *)
-intros n n0 n1 n2 Hn1 Hn0 Hn n3 n4 n5 Hn4 Hn5 Hn2.
+intros n n0 n1 Hn0 Hn n2 n3 n4 Hn3 Hn2 Hn1.
+destruct n1.
+simpl in Hn1.
+lia.
+apply mul_div_mod_lt.
+lia.
+lia.
+lia.
+
+(* case *)
+intros n n0 n1 Hn0 Hn n2 n3 n4 Hn3 Hn2 Hn1.
+destruct n1.
+simpl in Hn1.
+lia.
 rewrite<- Hn.
 rewrite<- (plus_0_r (n/3)).
 apply mul_div_mod_lt.
@@ -4837,7 +4860,6 @@ Proof.
 intros n.
 
 functional induction (pn2 n).
-simpl; lia.
 simpl; lia.
 simpl; lia.
 
@@ -4879,11 +4901,437 @@ Proof.
   apply exactlyn1_len in Hexact.
   lia.
 
-  (* Case 1 *).
+  (* Case 1 *)
   unfold procWorks.
+  simpl.
+  intros L Hlen Hexact.
+  inversion Hexact.
+  simpl.
+  auto.
+
+  rewrite<- H1 in Hlen.
+  simpl in Hlen.
+  apply eq_add_S in Hlen.
+  apply exactlyn1_len in H.
+  lia.
 
 
+  (* Case n/3 mod 3 = 2 *)
+  apply proc_split_works.
+  exact IHp.
+  exact IHp0.
 
+  (* Case n/3 mod 3 <> 2 *)
+  apply proc_split_works.
+  exact IHp.
+  exact IHp0.
+Qed.
+
+
+Lemma mod_div_nostep:
+  forall a b : nat,
+    b<>0 -> (S a) mod b > 0 -> (((S a) / b) = a/b).
+Proof.
+  intros a b Hb Hmod.
+  rewrite (div_mod a b Hb) at 1.
+  rewrite<- Nat.add_1_r.
+  rewrite<- plus_assoc.
+  rewrite mult_comm at 1.
+  rewrite (Nat.div_add_l _ _ _ Hb).
+  rewrite<- (plus_0_r (a / b)) at 2.
+  apply Nat.add_cancel_l.
+  apply Nat.div_small.
+  assert(H: a mod b < (b-1) \/ a mod b = b-1).
+  assert (H2 := Nat.mod_upper_bound a b Hb).
+  lia.
+  destruct H as [Hlt | Heq].
+  lia.
+
+  assert (Hbgt1: b > 1).
+  destruct b.
+  lia.
+  destruct b.
+  simpl in Hmod.
+  lia.
+  lia.
+  
+  rewrite<- Nat.add_1_r in Hmod.
+  rewrite (Nat.add_mod _ _ _ Hb) in Hmod.
+  rewrite Heq in Hmod.
+  rewrite (Nat.mod_1_l _ Hbgt1) in Hmod.
+  replace (b - 1 + 1) with b in Hmod.
+
+  rewrite Nat.mod_same in Hmod.
+  lia.
+  exact Hb.
+  lia.
+Qed.
+
+Lemma mod_div_step:
+  forall a b:nat,
+    b<>0 -> (S a) mod b = 0 -> ((S a)/b = a/b + 1).
+Proof.
+  intros a b Hb Hmod.
+
+  assert (Hmod' := Hmod).
+
+  assert(Hcases: b = 1 \/ b>1).
+  lia.
+  destruct Hcases as [H1 | Hgt1].
+  rewrite H1.
+  rewrite Nat.div_1_r.
+  rewrite Nat.div_1_r.
+  lia.
+
+  rewrite<- Nat.add_1_r in Hmod.
+  rewrite Nat.add_mod in Hmod.
+  rewrite (Nat.mod_1_l b Hgt1) in Hmod.
+  
+  assert (Hbound : a mod b + 1 < b +1).
+  apply plus_lt_compat_r.
+  apply Nat.mod_bound_pos.
+  lia.
+  lia.
+
+  assert (Hcases: a mod b + 1 = b \/ a mod b + 1 < b).
+  lia.
+
+  destruct Hcases as [Htrue | Hbogus].
+
+  
+  apply (Nat.mul_cancel_l _ _ b Hb).
+  rewrite mult_plus_distr_l.
+  rewrite mult_1_r.
+  rewrite<- Htrue at 5.
+  rewrite plus_assoc.
+  rewrite<- (div_mod _ b Hb).
+  rewrite (plus_n_O (b * (S a / b))).
+  rewrite<- Hmod' at 1.
+  rewrite<- (div_mod _ b Hb).
+  lia.
+
+  rewrite (Nat.mod_small _ _ Hbogus) in Hmod.
+  lia.
+  lia.
+Qed.
+
+Lemma mod_plus_compat:
+  forall a b n d : nat,
+    n <> 0 -> ((a mod n = b mod n) <-> ((a + d) mod n = (b + d) mod n)).
+Proof.
+  intros a b n d Hn.
+  apply conj.
+  
+  intros H.
+  rewrite<- (Nat.add_mod_idemp_l _ _ _ Hn) at 1.
+  rewrite H.
+  rewrite (Nat.add_mod_idemp_l _ _ _ Hn) at 1.
+  reflexivity.
+  
+  intros H.
+  induction d.
+  rewrite plus_0_r in H.
+  rewrite plus_0_r in H.
+  exact H.
+
+  apply IHd.
+  clear IHd.
+  
+  replace (a + S d) with ((a+d) + 1) in H.
+  replace (b + S d) with ((b+d) + 1) in H.
+
+  rewrite<- (Nat.add_mod_idemp_l (a+d) 1 n Hn) in H. 
+  rewrite<- (Nat.add_mod_idemp_l (b+d) 1 n Hn) in H.
+
+  assert (Had : (a + d) mod n + 1 < n \/ (a+d) mod n + 1 = n).
+  apply le_lt_or_eq.
+  assert (H' := (Nat.mod_upper_bound (a + d) n Hn)).
+  lia.
+
+  assert (Hbd : (b + d) mod n + 1 < n \/ (b+d) mod n + 1 = n).
+  apply le_lt_or_eq.
+  assert (H' := (Nat.mod_upper_bound (b + d) n Hn)).
+  lia.
+
+  remember ((b + d) mod n) as bd.
+  remember ((a + d) mod n) as ad.
+
+  destruct Had as [Hads | Hadn].
+  destruct Hbd as [Hbds | Hbdn].
+
+  rewrite (Nat.mod_small (ad + 1) n Hads) in H.
+  rewrite (Nat.mod_small (bd + 1) n Hbds) in H.
+  lia.
+
+  rewrite (Nat.mod_small (ad + 1) n Hads) in H.
+  rewrite Hbdn in H.
+  rewrite (Nat.mod_same n Hn) in  H.
+  lia.
+
+  destruct Hbd as [ Hbds | Hbdn ].
+  rewrite Hadn in H.
+  rewrite (Nat.mod_same n Hn) in H.
+  
+  rewrite (Nat.mod_small (bd + 1) n Hbds) in H.
+  lia.
+
+  lia.
+  lia.
+  lia.
+Qed.
+
+
+Lemma pn2_cost_monotonic_S: 
+  forall n : nat, procCost (pn2 n) <= procCost (pn2 (S n)).
+Proof.
+  intro n.
+
+  functional induction (pn2 n).
+
+  (* Case n = 0 *)
+  simpl. lia.
+
+  (* Case n = 1 *)
+  simpl. lia.
+
+  (* Case n mod 3 = 2 *)
+  unfold proc_split.
+  unfold procCost. fold procCost.
+  remember (procCost (pn2 (n/3 + 1))) as c31.
+  remember (procCost (pn2 (n/3))) as c30.
+  
+  rewrite pn2_equation.
+
+  assert (Hsilly: S n mod 3 = 0).
+  replace (S n) with (n + 1).
+  rewrite Nat.add_mod.
+  rewrite e0.
+  simpl.
+  auto.
+  auto.
+  lia.
+  rewrite Hsilly.
+  destruct n.
+  simpl in e0.
+  lia.
+  
+  unfold proc_split.
+  unfold procCost. fold procCost.
+
+  rewrite plus_0_r.
+  rewrite Max.max_idempotent.
+  rewrite Max.max_idempotent.
+
+  apply plus_le_compat_l.
+
+  assert (Hsilly2: S (S n) / 3 = (S n) / 3 + 1).
+  apply mod_div_step.
+  auto.
+  exact Hsilly.
+
+  rewrite<- Hsilly2 in Heqc31.
+  rewrite<- Heqc31.
+
+  apply Max.max_lub.
+  auto.
+  apply Max.max_lub.
+ 
+  rewrite<- Nat.add_1_r in IHp0.
+  rewrite<- Hsilly2 in IHp0.
+  rewrite<- Heqc31 in IHp0.
+  exact IHp0.
+
+  auto.
+
+
+  (* Case n mod 3 <> 2 *)
+  unfold proc_split.
+  unfold procCost. fold procCost.
+
+  remember (procCost (pn2 (n / 3 + n mod 3))) as cnm3.
+  remember (procCost (pn2 (n/3))) as cn3.
+
+  rewrite pn2_equation.
+
+  destruct n.
+  contradiction y.
+
+  remember (S (S n) mod 3) as m3.
+  
+  assert (Hm3 : m3 = 0 \/ m3 = 1 \/ m3 = 2).
+  assert (H' : (S (S n) mod 3) < 3).
+  apply mod_bound_pos.
+  lia.
+  lia.
+  lia.
+
+  decompose [or] Hm3.
+  
+  assert (H2 : S n mod 3 = 2).
+  rewrite<- (Nat.mod_small 2 3) at 2.
+  rewrite (mod_plus_compat _ _ 3 1).
+  simpl ((2+1) mod 3).
+  rewrite Nat.add_1_r.
+  rewrite<- Heqm3.
+  exact H.
+  auto.
+  auto.
+  rewrite H2 in y0.
+  contradiction y0.
+
+  rewrite H0.
+  assert (H1: S n mod 3 = 0).
+  rewrite<- (Nat.mod_same 3) at 2.
+  rewrite (mod_plus_compat _ _ 3 1).
+  rewrite Nat.add_1_r.
+  rewrite<- Heqm3.
+  rewrite H0.
+  simpl.
+  reflexivity.
+  auto.
+  auto.
+
+  rewrite H1 in *.
+  
+  assert(H2 : S (S n) / 3 = (S n) / 3).
+  apply mod_div_nostep.
+  lia.
+  rewrite<- Heqm3.
+  rewrite H0.
+  auto.
+  rewrite H2.
+
+  unfold proc_split; unfold procCost; fold procCost.
+
+  rewrite<- Heqcn3.
+
+  
+  apply plus_le_compat_l.
+  apply Nat.max_le_compat_l.
+  apply Nat.max_le_compat_r.
+  
+  rewrite plus_0_r in IHp0.
+  rewrite<- Nat.add_1_r in IHp0.
+
+  exact IHp0.
+
+  rewrite H0.
+  unfold proc_split; unfold procCost; fold procCost.
+
+  apply plus_le_compat_l.
+
+  assert (H2 : S (S n) / 3 = (S n) / 3).
+  apply mod_div_nostep.
+  lia.
+  rewrite<- Heqm3; rewrite H0.
+  auto.
+  rewrite H2.
+  
+  rewrite<- Heqcn3.
+
+  assert (Hm : (S n) mod 3 = 1).
+  rewrite<- (Nat.mod_1_l 3) at 2.
+  apply<- (mod_plus_compat (S n) 1 3 1).
+  rewrite Nat.add_1_r.
+  rewrite<- Heqm3.
+  simpl.
+  exact H0.
+  auto.
+  auto.
+
+  rewrite Hm in Heqcnm3.
+  rewrite<- Heqcnm3.
+
+
+  rewrite (Max.max_assoc _ cn3 _).
+  rewrite (Max.max_comm _ cn3).
+  rewrite<- (Max.max_assoc _ cnm3 _).
+  rewrite Max.max_idempotent.
+  rewrite (Max.max_assoc cn3 cn3 _).
+  rewrite Max.max_idempotent.
+  lia.
+Qed.
+
+Lemma pn2_cost_monotonic_add:
+  forall n k:nat, procCost (pn2 n) <= procCost (pn2 (n+k)).
+Proof.
+  intros n k.
+  induction k.
+  
+  rewrite plus_0_r.
+  auto.
+
+  apply (le_trans _ (procCost (pn2 (n+k))) _).
+  exact IHk.
+  replace (n+ S k) with (S (n+k)).
+  apply pn2_cost_monotonic_S.
+  lia.
+Qed.
+
+Lemma pn2_cost_monotonic:
+      forall n m:nat, n<=m -> procCost (pn2 n) <= procCost(pn2 m).
+Proof.
+  intros n m Hnm.
+  apply Nat.le_exists_sub in Hnm.
+  elim Hnm.
+  intros k H.
+  decompose [and] H.
+  rewrite H0.
+  rewrite plus_comm.
+  apply pn2_cost_monotonic_add.
+Qed.
+
+Lemma pn2_cost_pow3:
+  forall n:nat, procCost(pn2 (3^n)) = n.
+Proof.
+  intro n. 
+  induction n.
+  simpl; reflexivity.
+
+  replace (3 ^ (S n)) with (3 * (3 ^ n)).
+  remember (3 * 3 ^ n) as k.
+  assert (Hduh : 3 ^ n > 0).
+  assert (Hyep := Nat.pow_nonzero 3 n).
+  lia.
+  functional induction (pn2 k).
+  lia.
+  lia.
+
+  rewrite mult_comm in e0.
+  rewrite Nat.mod_mul in e0.
+  lia.
+  auto.
+  
+  rewrite (mult_comm 3 _).
+  rewrite Nat.mod_mul.
+  rewrite Nat.div_mul.
+  rewrite plus_0_r.
+  
+  unfold proc_split; unfold procCost; fold procCost.
+
+  rewrite IHn.
+  rewrite Max.max_idempotent.
+  rewrite Max.max_idempotent.
+  lia.
+  auto.
+  auto.
+
+  symmetry.
+  apply pow_succ_r.
+  lia.
+Qed.
+            
+Lemma pn2_ultimate:
+  forall p:proc, procWorks p -> procCost (pn2 (procDepth p)) <= procCost p.
+Proof.
+  intros p Hp.
+  apply proc_bound in Hp.
+  apply (le_trans _ (procCost (pn2 (3 ^ (procCost p)))) _).
+  apply pn2_cost_monotonic.
+  exact Hp.
+
+  rewrite pn2_cost_pow3.
+  auto.
 Qed.
 
 End Scales.
