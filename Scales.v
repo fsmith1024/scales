@@ -23,6 +23,8 @@ Require Import Coq.Numbers.Natural.Peano.NPeano.
 Require Import Psatz.
 Import ListNotations.
 
+Require Import Elementary.
+
 (** * Encoding sets of coins
 
 We encode sets of coins as a list of coins which are either fake coins
@@ -89,8 +91,8 @@ Inductive proc : Set :=
 
 Hint Constructors proc.
 
-(** To bring [[proc]] to life, we will now implement a semantics for
-the language.  *)
+(** To bring [[proc]] to life, implement a semantics for the language.
+*)
 
 (** ** Swap *)
 
@@ -121,11 +123,13 @@ Definition coin_sum (cs : coins) : nat := ListSet.set_fold_right plus (List.map 
 Hint Unfold coin_sum set_fold_right.
 
 
-Lemma sum_cons: forall L:coins, forall a:coin, coin_sum (a::L) = (coin_weight a) + (coin_sum L).
-auto.
+Lemma sum_cons:
+  forall L:coins, forall a:coin, coin_sum (a::L) = (coin_weight a) + (coin_sum L).
+Proof.
+  auto.
 Qed.
 
-(* Pick the first n elements of the list *)
+(** Pick the first n elements of the list *)
 Fixpoint pick_rec (A:Type) (n:nat) (L : list A) : (list A * list A) :=
    match L,n with
    | nil,_ => (nil,nil)
@@ -143,7 +147,7 @@ Definition weigh (n:nat) (L : coins) :=
 (** ** Evaluation *)
 
 (* Evaluate a weighing procedure. Given a set of coins this returns a
-reordered set. We consider this a solution if the fake coin is at the
+reordered set. Consider this procedure a solution if the fake coin is at the
 head of the list. *) 
 
 Fixpoint procEval (p: proc) (g: coins) : coins := match p with
@@ -167,7 +171,7 @@ Fixpoint procCost (p:proc) : nat :=
   | Weigh _  p1 p2 p3 => 1 + max (procCost p1) (max (procCost p2) (procCost p3))
   end.
 
-(** Maximum size stack this program can observe. *)
+(** Maximum size stack this procedure can observe. *)
 Fixpoint procDepth (p:proc) : nat :=
   (match p with 
   | Stop => 0
@@ -178,10 +182,10 @@ Fixpoint procDepth (p:proc) : nat :=
 
 (** * Correctness 
 
-For [[proc]] to be a valid encoding of this problem it is important
-that procedures cannot manufacture coins or otherwise cheat. To encode
-this correctness criteria we prove that the output is always a
-permutation of the input.
+For [[proc]] to be a valid encoding of the intended problem it is
+important that procedures cannot manufacture coins or otherwise
+cheat. To encode this correctness criteria establish that the output
+is always a permutation of the input.
 
 *)
 
@@ -193,7 +197,8 @@ Hint Resolve Permutation_cons Permutation_cons_app.
 Lemma swap_unfold_app:
   forall L:coins, forall m:nat,
     (fst (swap_rec coin L 0 m) ++ snd (swap_rec coin L 0 m)) = (swap coin L 0 m).
-auto.
+Proof.
+  auto.
 Qed.
 
 Hint Rewrite swap_unfold_app.
@@ -201,11 +206,20 @@ Hint Rewrite swap_unfold_app.
 Lemma swap_permutation_app:
   forall L:coins, forall a:coin, forall m k:nat,
     Permutation L (swap coin L m k) -> Permutation (a::L) (swap coin (a::L) (S m) k).
+Proof.
   intros L a m k H.
   unfold swap; simpl; apply Permutation_cons_app; exact H.
 Qed.
 
 Hint Resolve swap_permutation_app.
+
+(** * Smash 
+
+Smash is a primitive tactic inspired by Adam Chilpala's crush.  It
+doesn't always work, but when it does it can eliminate some very
+tedious proofs.
+
+*)
 
 Ltac smash := 
   repeat 
@@ -236,7 +250,9 @@ Ltac smash :=
   auto
 .
 
-Lemma swap_permutes: forall L:coins, forall k m:nat, Permutation L (swap coin L k m).
+Lemma swap_permutes:
+  forall L:coins, forall k m:nat, Permutation L (swap coin L k m).
+Proof.
   induction L; auto.
   destruct k; auto.
   destruct m; smash.
@@ -244,30 +260,34 @@ Qed.
 
 Hint Resolve swap_permutes.
 
-Lemma exactlyn_permutes: forall (nsl  nsl' : coins), (Permutation nsl nsl') ->
-    forall n:nat, exactlyn n nsl -> exactlyn n nsl'.
-intros nsl nsl'; induction 1.
-auto.
-intro n; inversion 1.
-smash.
-smash.
-smash.
-smash.
+Lemma exactlyn_permutes:
+  forall (nsl  nsl' : coins),
+    (Permutation nsl nsl') -> forall n:nat, exactlyn n nsl -> exactlyn n nsl'.
+Proof.
+  intros nsl nsl'; induction 1.
+  auto.
+  intro n; inversion 1.
+  smash.
+  smash.
+  smash.
+  smash.
 Qed.
 
 Hint Resolve exactlyn_permutes.
 
-Lemma procEval_permutes: forall p:proc, forall L : coins, Permutation L  (procEval p L).
-induction p.
-smash.
-smash.
-smash.
+Lemma procEval_permutes:
+  forall p:proc, forall L : coins, Permutation L  (procEval p L).
+Proof.
+  induction p.
+  smash.
+  smash.
+  smash.
 Qed.
 
 (** * Example with 4 and 12 coins *)
 
 (* Given 4 coins where one is fake. Find the fake one. [[p4] encodes a
-solution to this problem. We will prove this below. *)
+solution to this problem. Proof below. *)
 
 Definition p4 : proc :=
    (Weigh 1 
@@ -275,20 +295,22 @@ Definition p4 : proc :=
         (Swap 2 2 (Weigh 1 Stop Stop (Swap 1 1 Stop)))
         (Swap 1 1 Stop)).
 
-Example p4Example1: procEval p4 [gold;gold;fake;gold] = [fake;gold;gold;gold].
-compute.
-reflexivity.
+Example p4Example1:
+  procEval p4 [gold;gold;fake;gold] = [fake;gold;gold;gold].
+Proof.
+  compute.
+  reflexivity.
 Qed.
 
-(* Given twelve coins where one is lighter, Find the lighter one
-[[p12]] is a solution to this problem as we will prove below. *)
+(** Given twelve coins where one is lighter, Find the lighter one.
+[[p12]] is a solution to this problem (proof below). *)
 Definition p12 : proc :=
     (Weigh 4
         p4
          (Swap 8 4 p4)
          (Swap 4 4 p4)).
 
-(* Examples used to test our proposed solution. *)
+(** Examples used to test the proposed solution. *)
 Definition ex1 : coins := [gold;gold;gold;gold; gold;gold;gold;gold; gold;gold;gold;fake].
 Definition ex2 : coins := [gold;fake;gold;gold; gold;gold;gold;gold; gold;gold;gold;gold].
 Definition ex3 : coins := [gold;gold;gold;gold; gold;gold;fake;gold; gold;gold;gold;gold].
@@ -301,1209 +323,874 @@ Eval cbv in (procEval p12 ex3).
 
 Eval simpl in (procCost p12).
 
-Lemma procEval_length: forall p:proc, forall L:coins, (length L) = (length (procEval p L)).
-intros p L.
-apply Permutation_length.
-apply procEval_permutes.
+Lemma procEval_length:
+  forall p:proc, forall L:coins, (length L) = (length (procEval p L)).
+Proof.
+  intros p L.
+  apply Permutation_length.
+  apply procEval_permutes.
 Qed.
 
 Hint Rewrite procEval_length.
 
-Lemma firstn_length: forall A:Type, forall L1 L2 : (list A), (firstn (length L1) (L1 ++ L2)) = L1.
-smash.
-induction L1.
-smash.
-smash.
+(* Hint Rewrite <- firstn_length_app. *)
+(* Hint Resolve hd_length. *)
+(* Hint Resolve tail_length. *)
+(* Hint Resolve length_app_eq_fst. *)
+(* Hint Resolve length_app_eq_snd. *)
+(* Hint Resolve app_cons_ignore. *)
+
+Lemma swap_rec_fst_len:
+  forall A:Type, forall L:list A, forall n m:nat,
+    (length (fst (swap_rec A L n m))) = (min ((length L)-n) m).
+Proof.
+  intros A L.
+  induction L.
+  simpl; reflexivity.
+  induction n.
+  induction m.
+  simpl; reflexivity.
+  simpl.
+  f_equal.
+  replace (length L) with ((length L) - 0).
+  apply IHL.
+  rewrite minus_n_O.
+  reflexivity.
+  induction m.
+  simpl.
+  apply IHL.
+  simpl.
+  apply IHL.
 Qed.
 
-Hint Rewrite <- firstn_length.
-
-Lemma hd_length:
-  forall A:Type, forall L1 L2 L3 L4 : list A,
-    length L1 = length L2 -> (L1 ++ L3 = L2 ++ L4) -> L1 = L2.
-smash.
-intro H.
-rewrite <- (firstn_length A L1 L3).
-rewrite <- (firstn_length A L2 L4).
-smash.
+Lemma swap_equiv:
+  forall A:Type, forall L: list A, forall n m:nat,
+    (swap A L n m) = (swap_alt A L n m).
+Proof.
+  intros A L.
+  induction L.
+  unfold swap; unfold swap_alt.
+  simpl.
+  destruct n.
+  simpl.
+  destruct m.
+  simpl; reflexivity.
+  simpl; reflexivity.
+  destruct m.
+  simpl;reflexivity.
+  simpl;reflexivity.
+  unfold swap; unfold swap_alt.
+  induction n.
+  simpl.
+  induction m.
+  simpl; reflexivity.
+  simpl.
+  f_equal.
+  apply IHL.
+  simpl.
+  intro m.
+  apply app_cons_ignore.
+  rewrite swap_rec_fst_len.
+  rewrite List.firstn_length.
+  rewrite Min.min_comm at 1.
+  f_equal.
+  rewrite skipn_length.
+  reflexivity.
+  apply IHL.
 Qed.
 
-Hint Resolve hd_length.
-
-Lemma tail_length: 
-  forall A:Type, forall L1 L2 L3 L4 : list A, 
-    length L1 = length L2 -> L1 ++ L3 = L2 ++ L4 -> L3 = L4.
-smash.
-intro H.
-assert(H2 : L1 = L2).
-eapply hd_length.
-exact x.
-exact H.
-rewrite H2 in H.
-smash. 
-apply (app_inv_head L2).
-smash.
-Qed.
- 
-Hint Resolve tail_length.
-
-Lemma plus_reg_r:
-  forall n m p : nat, n + p = m + p -> n = m.
-intros n m p H.
-apply (plus_reg_l n m p).
-rewrite (plus_comm p n).
-rewrite (plus_comm p m).
-exact H.
-Qed.
-
-Lemma length_app_eq_first:
-  forall A:Type, forall L1 L2 L3 L4 : list A,
-    L1 ++ L3 = L2 ++ L4 -> (length L3 = length L4) -> (length L1 = length L2).
-smash.
-intro H.
-apply (plus_reg_r _ _ (length L3)).
-rewrite H at 2.
-rewrite<- app_length.
-rewrite<- app_length.
-rewrite x.
-reflexivity.
-Qed.
-
-Lemma length_app_eq_second:
-  forall A:Type, forall L1 L2 L3 L4 : list A,
-    L1 ++ L3 = L2 ++ L4 -> (length L1 = length L2) -> (length L3 = length L4).
-smash.
-intro H.
-apply (plus_reg_l _ _ (length L1)).
-rewrite H at 2.
-rewrite<- app_length.
-rewrite<- app_length.
-rewrite x.
-reflexivity.
-Qed.
-
-Lemma length_app_eq_fst:
-  forall A:Type, forall L1 L2 L3 L4 : list A,
-    L1 ++ L3 = L2 ++ L4 
-    -> (length L1 = length L2 \/ length L3 = length L4) 
-    -> L1 = L2.
-smash.
-intro Hor; decompose [or] Hor.
-apply (hd_length _ L1 L2 L3 L4 H x).
-assert (Hlen: length L1 = length L2).
-rewrite<- (Nat.add_cancel_r _ _ (length L4)).
-rewrite<- H at 1.
-rewrite<- app_length.
-rewrite<- app_length.
-rewrite x.
-reflexivity.
-apply (hd_length _ L1 L2 L3 L4 Hlen x).
-Qed.
-
-Hint Resolve length_app_eq_fst.
-
-Lemma length_app_eq_snd:
-  forall A:Type, forall L1 L2 L3 L4 : list A,
-    L1 ++ L3 = L2 ++ L4 
-    -> (length L1 = length L2 \/ length L3 = length L4) 
-    -> L3 = L4.
-smash.
-intro H.
-apply length_app_eq_fst in H.
-assert (Hlen: length L1 = length L2).
-rewrite H.
-reflexivity.
-apply (tail_length A L1 L2 L3 L4 Hlen x).
-exact x.
-Qed.
-
-Hint Resolve length_app_eq_snd.
-
-Lemma app_cons_ignore: forall A:Type, forall L11 L12 L21  L22 : (list A), forall a : A, (length L11 = length L21) -> (L11 ++ L12 = L21 ++ L22) -> (L11 ++ (a::L12) = L21 ++ (a::L22)).
-smash.
-intro H.
-smash.
-apply (length_app_eq_fst _ L11 L21 L12 L22 H).
-left; exact x.
-apply (length_app_eq_snd _ L11 L21 L12 L22 H).
-left; exact x.
-Qed.
-
-Hint Resolve app_cons_ignore.
-
-Lemma skipn_length: forall A:Type, forall L : (list A), forall n:nat, length(skipn n L) = (length L) - n.
-intros A L.
-induction L.
-simpl.
-destruct n.
-simpl; reflexivity.
-simpl; reflexivity.
-induction n.
-simpl; reflexivity.
-simpl.
-apply IHL.
-Qed.
-
-Lemma swap_rec_fst_len: forall A:Type, forall L:list A, forall n m:nat, (length (fst (swap_rec A L n m))) = (min ((length L)-n) m).
-intros A L.
-induction L.
-simpl; reflexivity.
-induction n.
-induction m.
-simpl; reflexivity.
-simpl.
-f_equal.
-replace (length L) with ((length L) - 0).
-apply IHL.
-rewrite minus_n_O.
-reflexivity.
-induction m.
-simpl.
-apply IHL.
-simpl.
-apply IHL.
-Qed.
-
-Lemma swap_equiv: forall A:Type, forall L: list A, forall n m:nat, (swap A L n m) = (swap_alt A L n m).
-intros A L.
-induction L.
-unfold swap; unfold swap_alt.
-simpl.
-destruct n.
-simpl.
-destruct m.
-simpl; reflexivity.
-simpl; reflexivity.
-destruct m.
-simpl;reflexivity.
-simpl;reflexivity.
-unfold swap; unfold swap_alt.
-induction n.
-simpl.
-induction m.
-simpl; reflexivity.
-simpl.
-f_equal.
-apply IHL.
-simpl.
-intro m.
-apply app_cons_ignore.
-rewrite swap_rec_fst_len.
-rewrite List.firstn_length.
-rewrite Min.min_comm at 1.
-f_equal.
-rewrite skipn_length.
-reflexivity.
-apply IHL.
-Qed.
-
-Lemma swap_tl: forall A: Type, forall Lhd Ltl : (list A), forall n m : nat, 
-    ((n+m) <= length Lhd) -> (swap A (Lhd ++ Ltl) n m) = (swap A Lhd n m) ++ Ltl. 
-intros A Lhd.
-induction Lhd.
-simpl.
-intros Ltl n m.
-intro Hlen.
-apply le_n_0_eq in Hlen.
-symmetry in Hlen.
-apply plus_is_O in Hlen.
-elim Hlen.
-intros n0 m0.
-rewrite n0; rewrite m0.
-unfold swap.
-case Ltl.
-simpl;reflexivity.
-simpl;reflexivity.
-intros Ltl n m.
-induction n.
-simpl.
-induction m.
-intro.
-unfold swap; unfold swap_rec.
-simpl; reflexivity.
-intro Hlen.
-unfold swap; unfold swap_rec.
-fold swap_rec.
-simpl.
-f_equal.
-apply (IHLhd Ltl 0 m).
-simpl.
- apply le_S_n.
-exact Hlen.
-intro Hlen.
-unfold swap; unfold swap_rec.
-fold swap_rec.
-simpl.
-assert ((n+m) <= length Lhd).
-apply le_S_n.
-rewrite <- plus_Sn_m.
-replace (S (length Lhd)) with (length (a::Lhd)).
-exact Hlen.
-simpl;reflexivity.
-rewrite <- app_assoc.
-simpl.
-apply app_cons_ignore.
-rewrite swap_rec_fst_len.
-rewrite swap_rec_fst_len.
-replace (min (length (Lhd ++ Ltl) - n) m) with m.
-replace (min (length Lhd - n) m) with m.
-reflexivity.
-symmetry.
-apply Min.min_r.
-apply NPeano.Nat.le_add_le_sub_r.
-rewrite plus_comm.
-exact H.
-symmetry.
-apply Min.min_r.
-apply NPeano.Nat.le_add_le_sub_r.
-rewrite app_length.
-apply le_plus_trans.
-rewrite plus_comm.
-exact H.
-unfold swap in IHLhd.
-rewrite app_assoc.
-apply (IHLhd Ltl n m).
-exact H.
-Qed.
-
-Lemma skipn_app: 
-  forall A:Type, forall L1 L2 : list A,
-    (skipn (length L1) (L1 ++ L2)) = L2.
-intros A L1.
-induction L1.
-simpl.
-tauto.
-simpl.
-apply IHL1.
-Qed.
-
-Lemma firstn_id:
-  forall A:Type, forall L : list A,
-    (firstn (length L) L) = L.
-intros A L.
-induction L.
-simpl.
-reflexivity.
-simpl.
-f_equal.
-apply IHL.
+Lemma swap_tl:
+  forall A: Type, forall Lhd Ltl : (list A), forall n m : nat, 
+    ((n+m) <= length Lhd) -> (swap A (Lhd ++ Ltl) n m) = (swap A Lhd n m) ++ Ltl.
+Proof.
+  intros A Lhd.
+  induction Lhd.
+  simpl.
+  intros Ltl n m.
+  intro Hlen.
+  apply le_n_0_eq in Hlen.
+  symmetry in Hlen.
+  apply plus_is_O in Hlen.
+  elim Hlen.
+  intros n0 m0.
+  rewrite n0; rewrite m0.
+  unfold swap.
+  case Ltl.
+  simpl;reflexivity.
+  simpl;reflexivity.
+  intros Ltl n m.
+  induction n.
+  simpl.
+  induction m.
+  intro.
+  unfold swap; unfold swap_rec.
+  simpl; reflexivity.
+  intro Hlen.
+  unfold swap; unfold swap_rec.
+  fold swap_rec.
+  simpl.
+  f_equal.
+  apply (IHLhd Ltl 0 m).
+  simpl.
+  apply le_S_n.
+  exact Hlen.
+  intro Hlen.
+  unfold swap; unfold swap_rec.
+  fold swap_rec.
+  simpl.
+  assert ((n+m) <= length Lhd).
+  apply le_S_n.
+  rewrite <- plus_Sn_m.
+  replace (S (length Lhd)) with (length (a::Lhd)).
+  exact Hlen.
+  simpl;reflexivity.
+  rewrite <- app_assoc.
+  simpl.
+  apply app_cons_ignore.
+  rewrite swap_rec_fst_len.
+  rewrite swap_rec_fst_len.
+  replace (min (length (Lhd ++ Ltl) - n) m) with m.
+  replace (min (length Lhd - n) m) with m.
+  reflexivity.
+  symmetry.
+  apply Min.min_r.
+  apply NPeano.Nat.le_add_le_sub_r.
+  rewrite plus_comm.
+  exact H.
+  symmetry.
+  apply Min.min_r.
+  apply NPeano.Nat.le_add_le_sub_r.
+  rewrite app_length.
+  apply le_plus_trans.
+  rewrite plus_comm.
+  exact H.
+  unfold swap in IHLhd.
+  rewrite app_assoc.
+  apply (IHLhd Ltl n m).
+  exact H.
 Qed.
 
 Lemma swap_app: 
   forall A:Type, forall L1 L2:list A, 
     swap A (L1 ++ L2) (length L1) (length L2) = (L2 ++ L1).
-intros A L1 L2.
-rewrite swap_equiv.
-unfold swap_alt.
-rewrite skipn_app.
-rewrite firstn_id.
-rewrite app_assoc.
-rewrite firstn_length.
-rewrite<- app_length.
-rewrite<- (app_nil_r (L1 ++ L2)) at 2. 
-rewrite skipn_app.
-rewrite app_nil_r.
-reflexivity.
+Proof.
+  intros A L1 L2.
+  rewrite swap_equiv.
+  unfold swap_alt.
+  rewrite skipn_app.
+  rewrite firstn_id.
+  rewrite app_assoc.
+  rewrite firstn_length_app.
+  rewrite<- app_length.
+  rewrite<- (app_nil_r (L1 ++ L2)) at 2. 
+  rewrite skipn_app.
+  rewrite app_nil_r.
+  reflexivity.
 Qed.
 
 Lemma fst_pick_rec: 
   forall A:Type, forall L : list A, forall n:nat,
     length L = n -> fst(pick_rec A n L) = L.
-intros A L.
-induction L.
-intros n Hlen.
-simpl in Hlen.
-rewrite <- Hlen.
-simpl.
-reflexivity.
-intro n.
-intro Hlen.
-simpl in Hlen.
-rewrite<- Hlen.
-simpl.
-f_equal.
-apply IHL.
-reflexivity.
-Qed.
- 
-Lemma fst_pick_rec_tl: forall A:Type, forall n:nat, forall Lhd Ltl : list A, 
-   (n <= length Lhd) -> fst(pick_rec A n Lhd) = fst (pick_rec A n (Lhd ++ Ltl)).
-intro A.
-induction n.
-intro Lhd.
-simpl.
-destruct Lhd, Ltl.
-auto.
-auto.
-auto.
-auto.
-simpl.
-destruct Lhd.
-simpl.
-intros Ltl H.
-apply NPeano.Nat.nle_succ_0 in H.
-contradiction.
-simpl.
-intro Ltl.
-intro H.
-apply le_S_n in H.
-f_equal.
-apply IHn.
-exact H.
+Proof.
+  intros A L.
+  induction L.
+  intros n Hlen.
+  simpl in Hlen.
+  rewrite <- Hlen.
+  simpl.
+  reflexivity.
+  intro n.
+  intro Hlen.
+  simpl in Hlen.
+  rewrite<- Hlen.
+  simpl.
+  f_equal.
+  apply IHL.
+  reflexivity.
 Qed.
 
-Lemma fst_pick_rec_app: forall A:Type, forall n:nat, forall L1 L2: list A,
-(length L1) = n -> fst(pick_rec A n (L1++L2)) = L1.
-intros A n L1 L2 Hlen.
-rewrite<- fst_pick_rec_tl.
-rewrite fst_pick_rec.
-reflexivity.
-exact Hlen.
-rewrite Hlen.
-apply le_n.
+Lemma fst_pick_rec_tl:
+  forall A:Type, forall n:nat, forall Lhd Ltl : list A, 
+    (n <= length Lhd) -> fst(pick_rec A n Lhd) = fst (pick_rec A n (Lhd ++ Ltl)).
+Proof.
+  intro A.
+  induction n.
+  intro Lhd.
+  simpl.
+  destruct Lhd, Ltl.
+  auto.
+  auto.
+  auto.
+  auto.
+  simpl.
+  destruct Lhd.
+  simpl.
+  intros Ltl H.
+  apply NPeano.Nat.nle_succ_0 in H.
+  contradiction.
+  simpl.
+  intro Ltl.
+  intro H.
+  apply le_S_n in H.
+  f_equal.
+  apply IHn.
+  exact H.
+Qed.
+
+Lemma fst_pick_rec_app:
+  forall A:Type, forall n:nat, forall L1 L2: list A,
+    (length L1) = n -> fst(pick_rec A n (L1++L2)) = L1.
+Proof.
+  intros A n L1 L2 Hlen.
+  rewrite<- fst_pick_rec_tl.
+  rewrite fst_pick_rec.
+  reflexivity.
+  exact Hlen.
+  rewrite Hlen.
+  apply le_n.
 Qed.
 
 Lemma snd_pick_rec: 
   forall A:Type, forall L1 L2 : list A, forall n:nat,
     (length L1) = n -> (snd (pick_rec A n (L1 ++ L2))) = L2.
-intros A L1.
-induction L1.
-intros L2 n Hlen.
-simpl in Hlen.
-rewrite <- Hlen.
-simpl.
-destruct L2.
-simpl; reflexivity.
-simpl; reflexivity.
-intros L2 n Hlen.
-simpl in Hlen.
-rewrite <- Hlen.
-simpl.
-apply IHL1.
-reflexivity.
+Proof.
+  intros A L1.
+  induction L1.
+  intros L2 n Hlen.
+  simpl in Hlen.
+  rewrite <- Hlen.
+  simpl.
+  destruct L2.
+  simpl; reflexivity.
+  simpl; reflexivity.
+  intros L2 n Hlen.
+  simpl in Hlen.
+  rewrite <- Hlen.
+  simpl.
+  apply IHL1.
+  reflexivity.
 Qed.
 
-Lemma snd_pick_rec_tl: forall A:Type, forall n:nat, forall Lhd Ltl : list A, 
-   (n <= length Lhd) -> snd(pick_rec A n Lhd)++Ltl = snd (pick_rec A n (Lhd ++ Ltl)).
-intros A n.
-induction n.
-destruct Lhd.
-simpl.
-destruct Ltl.
-auto.
-auto.
-simpl.
-reflexivity.
-intros Lhd Ltl H.
-destruct Lhd.
-simpl.
-destruct Ltl.
-auto.
-simpl.
-simpl in H.
-apply NPeano.Nat.nle_succ_0 in H.
-contradiction.
-simpl.
-apply IHn.
-simpl in H.
-apply le_S_n in H.
-exact H.
+Lemma snd_pick_rec_tl:
+  forall A:Type, forall n:nat, forall Lhd Ltl : list A, 
+    (n <= length Lhd) -> snd(pick_rec A n Lhd)++Ltl = snd (pick_rec A n (Lhd ++ Ltl)).
+Proof.
+  intros A n.
+  induction n.
+  destruct Lhd.
+  simpl.
+  destruct Ltl.
+  auto.
+  auto.
+  simpl.
+  reflexivity.
+  intros Lhd Ltl H.
+  destruct Lhd.
+  simpl.
+  destruct Ltl.
+  auto.
+  simpl.
+  simpl in H.
+  apply NPeano.Nat.nle_succ_0 in H.
+  contradiction.
+  simpl.
+  apply IHn.
+  simpl in H.
+  apply le_S_n in H.
+  exact H.
 Qed.
 
-Lemma snd_pick_rec_length:  forall A:Type, forall n:nat, forall L: list A, 
-   (length (snd (pick_rec A n L))) = (length L) - n.
-intros A n.
-induction n.
-simpl.
-destruct L.
-auto.
-simpl.
-auto.
-simpl.
-destruct L.
-auto.
-simpl.
-apply IHn.
+Lemma snd_pick_rec_length:
+  forall A:Type, forall n:nat, forall L: list A, 
+    (length (snd (pick_rec A n L))) = (length L) - n.
+Proof.
+  intros A n.
+  induction n.
+  simpl.
+  destruct L.
+  auto.
+  simpl.
+  auto.
+  simpl.
+  destruct L.
+  auto.
+  simpl.
+  apply IHn.
 Qed.
 
-Lemma weigh_tl: forall n:nat, forall Lhd Ltl: coins, (n+n <= length Lhd) -> weigh n Lhd = weigh n (Lhd ++ Ltl).
-induction n.
-simpl.
-unfold weigh.
-simpl.
-destruct Lhd.
-simpl.
-destruct Ltl.
-auto.
-auto.
-auto.
-intros Lhd Ltl Hlen.
-unfold weigh.
-rewrite (surjective_pairing (pick_rec coin (S n) Lhd) ).
-rewrite (surjective_pairing (pick_rec coin (S n) (Lhd++Ltl))).
-rewrite (surjective_pairing _).
-rewrite (surjective_pairing (pick_rec coin (S n) (snd (pick_rec coin (S n) (Lhd ++ Ltl))))).
-rewrite <- fst_pick_rec_tl.
-rewrite <- snd_pick_rec_tl.
-rewrite <- fst_pick_rec_tl.
-reflexivity.
-simpl.
-destruct Lhd.
-simpl.
-simpl in Hlen.
-apply NPeano.Nat.nle_succ_0 in Hlen.
-contradiction.
-simpl.
-rewrite snd_pick_rec_length.
-apply  NPeano.Nat.le_add_le_sub_r.
-simpl in Hlen.
-apply le_S_n in Hlen.
-replace (S n + n) with (n + S n).
-exact Hlen.
-rewrite plus_comm at 1.
-reflexivity.
-apply (NPeano.Nat.le_le_add_le 0 (S n)).
-apply le_0_n.
-rewrite <- plus_n_O.
-exact Hlen.
-apply (NPeano.Nat.le_le_add_le 0 (S n)).
-apply le_0_n.
-rewrite <- plus_n_O.
-exact Hlen.
+Lemma weigh_tl:
+  forall n:nat, forall Lhd Ltl: coins,
+    (n+n <= length Lhd) -> weigh n Lhd = weigh n (Lhd ++ Ltl).
+Proof.
+  induction n.
+  simpl.
+  unfold weigh.
+  simpl.
+  destruct Lhd.
+  simpl.
+  destruct Ltl.
+  auto.
+  auto.
+  auto.
+  intros Lhd Ltl Hlen.
+  unfold weigh.
+  rewrite (surjective_pairing (pick_rec coin (S n) Lhd) ).
+  rewrite (surjective_pairing (pick_rec coin (S n) (Lhd++Ltl))).
+  rewrite (surjective_pairing _).
+  rewrite (surjective_pairing (pick_rec coin (S n) (snd (pick_rec coin (S n) (Lhd ++ Ltl))))).
+  rewrite <- fst_pick_rec_tl.
+  rewrite <- snd_pick_rec_tl.
+  rewrite <- fst_pick_rec_tl.
+  reflexivity.
+  simpl.
+  destruct Lhd.
+  simpl.
+  simpl in Hlen.
+  apply NPeano.Nat.nle_succ_0 in Hlen.
+  contradiction.
+  simpl.
+  rewrite snd_pick_rec_length.
+  apply  NPeano.Nat.le_add_le_sub_r.
+  simpl in Hlen.
+  apply le_S_n in Hlen.
+  replace (S n + n) with (n + S n).
+  exact Hlen.
+  rewrite plus_comm at 1.
+  reflexivity.
+  apply (NPeano.Nat.le_le_add_le 0 (S n)).
+  apply le_0_n.
+  rewrite <- plus_n_O.
+  exact Hlen.
+  apply (NPeano.Nat.le_le_add_le 0 (S n)).
+  apply le_0_n.
+  rewrite <- plus_n_O.
+  exact Hlen.
 Qed.  
 
-Lemma swap_length: forall A:Type, forall L: list A, forall n m:nat,
+Lemma swap_length:
+  forall A:Type, forall L: list A, forall n m:nat,
     length L = length (swap A L n m).
-intros A L.
-induction L.
-simpl; reflexivity.
-simpl.
-unfold swap.
-simpl.
-induction n.
-induction m.
-simpl; reflexivity.
-simpl.
-apply eq_S.
-apply IHL.
-simpl.
-intro m.
-rewrite app_length.
-unfold length at 3.
-rewrite NPeano.Nat.add_succ_r.
-f_equal.
-rewrite<- app_length.
-apply IHL.
+Proof.
+  intros A L.
+  induction L.
+  simpl; reflexivity.
+  simpl.
+  unfold swap.
+  simpl.
+  induction n.
+  induction m.
+  simpl; reflexivity.
+  simpl.
+  apply eq_S.
+  apply IHL.
+  simpl.
+  intro m.
+  rewrite app_length.
+  unfold length at 3.
+  rewrite NPeano.Nat.add_succ_r.
+  f_equal.
+  rewrite<- app_length.
+  apply IHL.
 Qed.
 
-Lemma procDepth_tl : forall p:proc, forall Lhd Ltl : coins,   
-      ((procDepth p) <= (length Lhd)) -> (procEval p (Lhd++Ltl)) = (procEval p Lhd) ++ Ltl.
-intro p.
-induction p.
-simpl; reflexivity.
-intros Lhd Ltl.
-unfold procDepth.
-fold procDepth.
-intro Hlen.
-unfold procEval.
-fold procEval.
-rewrite swap_tl.
-apply IHp.
-apply Max.max_lub_r in Hlen.
-rewrite <- swap_length.
-exact Hlen.
-apply Max.max_lub_l in Hlen.
-exact Hlen.
-unfold procDepth.
-fold procDepth.
-intros Lhd Ltl Hlen.
-unfold procEval.
-fold procEval.
-rewrite IHp1.
-rewrite IHp2.
-rewrite IHp3.
-rewrite<- weigh_tl.
-destruct (weigh n Lhd).
-reflexivity.
-reflexivity.
-reflexivity.
-apply Max.max_lub_l in Hlen.
-exact Hlen.
-apply Max.max_lub_r in Hlen.
-apply Max.max_lub_r in Hlen.
-exact Hlen.
-apply Max.max_lub_r in Hlen.
-apply Max.max_lub_l in Hlen.
-apply Max.max_lub_r in Hlen.
-exact Hlen.
-apply Max.max_lub_r in Hlen.
-apply Max.max_lub_l in Hlen.
-apply Max.max_lub_l in Hlen.
-exact Hlen.
+Lemma procDepth_tl:
+  forall p:proc, forall Lhd Ltl : coins,   
+    ((procDepth p) <= (length Lhd)) -> (procEval p (Lhd++Ltl)) = (procEval p Lhd) ++ Ltl.
+Proof.
+  intro p.
+  induction p.
+  simpl; reflexivity.
+  intros Lhd Ltl.
+  unfold procDepth.
+  fold procDepth.
+  intro Hlen.
+  unfold procEval.
+  fold procEval.
+  rewrite swap_tl.
+  apply IHp.
+  apply Max.max_lub_r in Hlen.
+  rewrite <- swap_length.
+  exact Hlen.
+  apply Max.max_lub_l in Hlen.
+  exact Hlen.
+  unfold procDepth.
+  fold procDepth.
+  intros Lhd Ltl Hlen.
+  unfold procEval.
+  fold procEval.
+  rewrite IHp1.
+  rewrite IHp2.
+  rewrite IHp3.
+  rewrite<- weigh_tl.
+  destruct (weigh n Lhd).
+  reflexivity.
+  reflexivity.
+  reflexivity.
+  apply Max.max_lub_l in Hlen.
+  exact Hlen.
+  apply Max.max_lub_r in Hlen.
+  apply Max.max_lub_r in Hlen.
+  exact Hlen.
+  apply Max.max_lub_r in Hlen.
+  apply Max.max_lub_l in Hlen.
+  apply Max.max_lub_r in Hlen.
+  exact Hlen.
+  apply Max.max_lub_r in Hlen.
+  apply Max.max_lub_l in Hlen.
+  apply Max.max_lub_l in Hlen.
+  exact Hlen.
 Qed.
 
 (* Now we can apply all of our hard earned knowledge to prove that our solution p4 works. *)
-Lemma p4Works: forall L: coins, (length L = 4) -> (exactlyn 1 L) -> ((hd gold (procEval p4 L)) = fake).
-intro L.
-intro Hlen.
-intro Hone.
-assert (length (procEval p4 L) = length L).
-apply Permutation_length.
-symmetry.
-apply procEval_permutes.
-rewrite Hlen in H.
-induction L.
-inversion Hone.
-induction L.
-inversion Hlen.
-induction L; inversion Hlen.
-induction L; inversion Hlen.
-induction L.
-unfold procEval; unfold p4.
-unfold weigh.
-unfold pick_rec.
-simpl.
-unfold coin_sum.
-simpl.
-clear IHL.
-clear IHL0.
-clear IHL1.
-clear IHL2.
-clear H1.
-clear H2.
-clear Hlen.
-inversion Hone.
-inversion H2.
-simpl; reflexivity.
-inversion H2.
-simpl; reflexivity.
-simpl.
-inversion H6.
-inversion H10.
-simpl; reflexivity.
-inversion H10.
-simpl; reflexivity.
-simpl.
-rewrite H12.
-rewrite <- H12 in H10.
-inversion H10.
-inversion H14.
-clear IHL.
-clear IHL0.
-clear IHL1.
-clear IHL2.
-clear H1.
-clear H2.
-clear IHL3.
-simpl in Hlen.
-exfalso.
-apply eq_add_S in Hlen.
-apply eq_add_S in Hlen.
-apply eq_add_S in Hlen.
-apply eq_add_S in Hlen.
-apply NPeano.Nat.neq_succ_0 in Hlen.
-exact Hlen.
+Lemma p4Works:
+  forall L: coins, (length L = 4) -> (exactlyn 1 L) -> ((hd gold (procEval p4 L)) = fake).
+Proof.
+  intro L.
+  intro Hlen.
+  intro Hone.
+  assert (length (procEval p4 L) = length L).
+  apply Permutation_length.
+  symmetry.
+  apply procEval_permutes.
+  rewrite Hlen in H.
+  induction L.
+  inversion Hone.
+  induction L.
+  inversion Hlen.
+  induction L; inversion Hlen.
+  induction L; inversion Hlen.
+  induction L.
+  unfold procEval; unfold p4.
+  unfold weigh.
+  unfold pick_rec.
+  simpl.
+  unfold coin_sum.
+  simpl.
+  clear IHL.
+  clear IHL0.
+  clear IHL1.
+  clear IHL2.
+  clear H1.
+  clear H2.
+  clear Hlen.
+  inversion Hone.
+  inversion H2.
+  simpl; reflexivity.
+  inversion H2.
+  simpl; reflexivity.
+  simpl.
+  inversion H6.
+  inversion H10.
+  simpl; reflexivity.
+  inversion H10.
+  simpl; reflexivity.
+  simpl.
+  rewrite H12.
+  rewrite <- H12 in H10.
+  inversion H10.
+  inversion H14.
+  clear IHL.
+  clear IHL0.
+  clear IHL1.
+  clear IHL2.
+  clear H1.
+  clear H2.
+  clear IHL3.
+  simpl in Hlen.
+  exfalso.
+  apply eq_add_S in Hlen.
+  apply eq_add_S in Hlen.
+  apply eq_add_S in Hlen.
+  apply eq_add_S in Hlen.
+  apply NPeano.Nat.neq_succ_0 in Hlen.
+  exact Hlen.
 Qed.
 
-Lemma p12Depth: procDepth p12 = 12.
-auto.
+Lemma p12Depth:
+  procDepth p12 = 12.
+Proof.
+  auto.
 Qed.
 
-Lemma list_length0 : forall A:Type, forall L: list A, (length L) = 0 -> L= [].
-intros A L.
-induction L.
-simpl.
-trivial.
-simpl.
-intro.
-discriminate.
+Lemma exactlyn_len:
+  forall L:coins,  forall n:nat, exactlyn n L -> n <= (length L).
+Proof.
+  intro L.
+  induction L.
+  intro n.
+  inversion 1.
+  simpl.
+  apply le_refl.
+  intro n.
+  inversion 1.
+  simpl.
+  apply le_n_S.
+  apply IHL.
+  exact H2.
+  simpl.
+  apply le_S.
+  apply IHL.
+  exact H2.
 Qed.
 
-Lemma breakup: forall n m k, n = (m+k) -> forall A:Type, forall Ln : list A, 
-    length(Ln) = n -> exists Lm Lk : list A, (Ln = Lm ++ Lk) /\ (length Lm = m) /\ (length Lk = k).
-intro n.
-induction n.
-intros m k Hmk A Ln.
-exists [].
-exists [].
-simpl.
-apply conj.
-apply list_length0; exact H.
-symmetry in Hmk.
-apply plus_is_O in Hmk.
-apply conj.
-symmetry.
-apply Hmk.
-symmetry.
-apply Hmk.
-intros m k Hmk A Ln.
-destruct Ln.
-simpl.
-intro.
-symmetry in H.
-apply NPeano.Nat.neq_succ_0 in H.
-contradiction.
-simpl.
-intro H.
-apply NPeano.Nat.succ_inj in H.
-destruct m.
-destruct k.
-apply NPeano.Nat.neq_succ_0 in Hmk.
-contradiction.
-simpl in Hmk.
-apply NPeano.Nat.succ_inj in Hmk.
-elim (IHn 0 k Hmk A Ln H).
-intro Lm.
-intro.
-elim H0.
-intro Lk.
-intro.
-exists Lm.
-exists (a::Lk).
-elim H1.
-intro H2.
-intro H3; elim H3; intro H4; intro H5.
-apply list_length0 in H4.
-rewrite H4.
-simpl.
-apply conj.
-f_equal.
-rewrite H4 in H2.
-simpl in H2.
-exact H2.
-apply conj.
-reflexivity.
-f_equal.
-exact H5.
-rewrite plus_Sn_m in Hmk. 
-apply NPeano.Nat.succ_inj in Hmk.
-elim (IHn m k Hmk A Ln H).
-intro Lm.
-intro H0; elim H0; intro Lk.
-intro H1.
-elim H1; intro H2; intro H3; elim H3; intro H4; intro H5.
-exists (a::Lm); exists Lk.
-rewrite<- app_comm_cons.
-apply conj.
-f_equal.
-exact H2.
-simpl.
-apply conj.
-apply eq_S.
-exact H4.
-exact H5.
+Lemma exactlyn_nil:
+  forall n:nat, exactlyn n [] -> n = 0.
+Proof.
+  intro n.
+  inversion 1.
+  reflexivity.
 Qed.
 
-Lemma exactlyn_len: forall L:coins,  forall n:nat, exactlyn n L -> n <= (length L).
-intro L.
-induction L.
-intro n.
-inversion 1.
-simpl.
-apply le_refl.
-intro n.
-inversion 1.
-simpl.
-apply le_n_S.
-apply IHL.
-exact H2.
-simpl.
-apply le_S.
-apply IHL.
-exact H2.
-Qed.
-
-Lemma exactlyn_nil: forall n:nat, exactlyn n [] -> n = 0.
-intro n.
-inversion 1.
-reflexivity.
-Qed.
-
-Lemma exactlyn_gold_rev: forall L:coins, forall n:nat, exactlyn n (gold::L) -> exactlyn n L.
-intro.
-induction L.
-intro n.
-inversion 1.
-exact H2.
-intro n.
-inversion 1.
-exact H2.
+Lemma exactlyn_gold_rev:
+  forall L:coins, forall n:nat, exactlyn n (gold::L) -> exactlyn n L.
+Proof.
+  intro.
+  induction L.
+  intro n.
+  inversion 1.
+  exact H2.
+  intro n.
+  inversion 1.
+  exact H2.
 Qed.
 
 Lemma exactlyn_gold_eq: 
-  forall L:coins, forall n:nat, 
-    exactlyn n (gold::L) <-> exactlyn n L.
-intros L n.
-apply conj.
-apply exactlyn_gold_rev.
-apply exactlyn_gold.
+  forall L:coins, forall n:nat, exactlyn n (gold::L) <-> exactlyn n L.
+Proof.
+  intros L n.
+  apply conj.
+  apply exactlyn_gold_rev.
+  apply exactlyn_gold.
 Qed.
 
-Lemma exactlyn_fake_rev: forall L:coins, forall n:nat, exactlyn n (fake::L) -> exactlyn (pred n) L.
-intros L n.
-inversion 1.
-simpl.
-exact H2.
+Lemma exactlyn_fake_rev:
+  forall L:coins, forall n:nat, exactlyn n (fake::L) -> exactlyn (pred n) L.
+Proof.
+  intros L n.
+  inversion 1.
+  simpl.
+  exact H2.
 Qed.
- 
+
 Lemma exactlyn_app: 
   forall L1 :coins, forall n1:nat, 
     exactlyn n1 L1 -> 
     forall L2 : coins, forall n2:nat, 
       exactlyn n2 L2 -> exactlyn (n1 + n2) (L1 ++ L2).
-intros L1 n1.
-induction 1.
-simpl.
-tauto.
-simpl.
-intros L2 n2 Hn2.
-apply exactlyn_fake.
-apply IHexactlyn.
-exact Hn2.
-intros L2 n2 Hn2.
-simpl.
-apply exactlyn_gold.
-apply IHexactlyn.
-exact Hn2.
+Proof.
+  intros L1 n1.
+  induction 1.
+  simpl.
+  tauto.
+  simpl.
+  intros L2 n2 Hn2.
+  apply exactlyn_fake.
+  apply IHexactlyn.
+  exact Hn2.
+  intros L2 n2 Hn2.
+  simpl.
+  apply exactlyn_gold.
+  apply IHexactlyn.
+  exact Hn2.
 Qed.
 
 Lemma exactlyn_app_rev_simpl:
   forall L1 L2 : coins, forall n:nat, 
-    exactlyn n (L1 ++ L2) 
-    -> exists n1 n2:nat, exactlyn n1 L1 /\ exactlyn n2 L2.
-induction L1.
-intros L2 n H.
-simpl in H.
-exists 0; exists n.
-smash.
-intros L2 n H.
-destruct a.
-rewrite<- app_comm_cons in H.
-apply exactlyn_gold_rev in H.
-specialize (IHL1 L2 n H).
-elim IHL1.
-intro n1.
-intro H2.
-elim H2.
-intro n2.
-intro H3.
-exists n1; exists n2.
-decompose [and] H3.
-apply conj.
-apply exactlyn_gold.
-exact H0.
-exact H1.
-rewrite<- app_comm_cons in H.
-apply exactlyn_fake_rev in H.
-specialize (IHL1 L2 (pred n) H).
-elim IHL1.
-intros n1 H2; elim H2; intros n2 H3.
-exists (S n1); exists n2.
-decompose [and] H3.
-apply conj.
-apply exactlyn_fake; exact H0.
-exact H1.
-Qed.
-                                   
-Lemma exacltyn_app_comm: forall L1 L2 : coins, forall n:nat, exactlyn n (L1 ++ L2) -> exactlyn n (L2 ++ L1).
-intros L1 L2 n.
-apply exactlyn_permutes.
-apply Permutation_app_comm.
+    exactlyn n (L1 ++ L2) -> exists n1 n2:nat, exactlyn n1 L1 /\ exactlyn n2 L2.
+Proof.
+  induction L1.
+  intros L2 n H.
+  simpl in H.
+  exists 0; exists n.
+  smash.
+  intros L2 n H.
+  destruct a.
+  rewrite<- app_comm_cons in H.
+  apply exactlyn_gold_rev in H.
+  specialize (IHL1 L2 n H).
+  elim IHL1.
+  intro n1.
+  intro H2.
+  elim H2.
+  intro n2.
+  intro H3.
+  exists n1; exists n2.
+  decompose [and] H3.
+  apply conj.
+  apply exactlyn_gold.
+  exact H0.
+  exact H1.
+  rewrite<- app_comm_cons in H.
+  apply exactlyn_fake_rev in H.
+  specialize (IHL1 L2 (pred n) H).
+  elim IHL1.
+  intros n1 H2; elim H2; intros n2 H3.
+  exists (S n1); exists n2.
+  decompose [and] H3.
+  apply conj.
+  apply exactlyn_fake; exact H0.
+  exact H1.
 Qed.
 
-Lemma exactlyn_app_rev: forall n:nat, forall L : coins, 
-  exactlyn n L -> forall L1 L2 : coins, L = L1 ++ L2 ->
-      exists n1 n2:nat, (exactlyn n1 L1 /\ exactlyn n2 L2 /\ n = (n1 + n2)).
-intros n L.
-intro H.
-induction H.
-intros L1 L2.
-intro Hnil.
-exists 0.
-exists 0.
-simpl.
-symmetry in Hnil.
-apply app_eq_nil in Hnil.
-decompose [and] Hnil.
-rewrite H; rewrite H0.
-apply conj.
-constructor.
-apply conj.
-constructor.
-reflexivity.
-intros L1 L2.
-destruct L1.
-simpl.
-intro HL2.
-rewrite<- HL2.
-exists 0.
-exists (S n).
-apply conj.
-constructor.
-apply conj.
-apply exactlyn_fake.
-exact H.
-simpl.
-reflexivity.
-rewrite <- app_comm_cons.
-intro H1.
-assert (ns = L1 ++ L2).
-change ns with (tl (fake::ns)).
-rewrite H1.
-simpl; reflexivity.
-specialize (IHexactlyn L1 L2 H0).
-elim IHexactlyn.
-intro n1.
-intro Htemp.
-elim Htemp.
-intro n2.
-intro Hand.
-decompose [and] Hand.
-exists (S n1).
-exists n2.
-apply conj.
-replace c with fake.
-apply exactlyn_fake.
-exact H2.
-change c with (hd fake (c :: L1 ++ L2)).
-rewrite <- H1.
-simpl; reflexivity.
-apply conj.
-exact H4.
-simpl.
-f_equal.
-exact H5.
-intros L1 L2 Happ.
-destruct L1.
-simpl in Happ.
-exists 0.
-exists n.
-apply conj.
-constructor.
-apply conj.
-rewrite <- Happ.
-apply exactlyn_gold.
-exact H.
-simpl; reflexivity.
-assert (ns = L1 ++ L2).
-change ns with (tl (gold::ns)).
-rewrite Happ.
-simpl.
-reflexivity.
-specialize (IHexactlyn L1 L2 H0).
-elim IHexactlyn.
-intro n1.
-intro Htemp.
-elim Htemp.
-intro n2.
-intro Hand.
-decompose [and] Hand.
-exists n1; exists n2.
-apply conj.
-replace c with gold.
-apply exactlyn_gold.
-exact H1.
-rewrite<- app_comm_cons in Happ.
-change c with (hd gold (c :: L1 ++ L2)).
-rewrite <- Happ.
-simpl; reflexivity.
-apply conj.
-exact H3.
-exact H4.
+Lemma exacltyn_app_comm:
+  forall L1 L2 : coins, forall n:nat, exactlyn n (L1 ++ L2) -> exactlyn n (L2 ++ L1).
+Proof.
+  intros L1 L2 n.
+  apply exactlyn_permutes.
+  apply Permutation_app_comm.
 Qed.
 
-Lemma length_0: forall A:Type, forall L:list A, length L = 0 -> L = [].
-intros A L.
-induction L.
-simpl; tauto.
-simpl.
-intro H.
-apply NPeano.Nat.neq_succ_0 in H.
-contradiction.
-Qed.
-
-Lemma nat_compare_plus: forall a n m:nat, nat_compare (a+n) (a+m) = nat_compare n m.
-intro a.
-induction a.
-simpl; tauto.
-intros n m.
-replace (S a + n) with (S (a+n)).
-replace (S a + m) with (S (a+m)).
-rewrite nat_compare_S.
-apply IHa.
-auto.
-auto.
-Qed.
-
-Definition flip x :=
-  match x with
-    | Gt => Lt
-    | Lt => Gt
-    | Eq => Eq
-end.
-              
-            
-Lemma nat_compare_flip: forall n m:nat, nat_compare n m = flip (nat_compare m n).
-intro n.
-induction n.
-intro m.
-induction m.
-simpl.
-reflexivity.
-simpl.
-reflexivity.
-induction m.
-simpl.
-reflexivity.
-simpl.
-apply IHn.
-Qed.  
-
-Lemma nat_compare_0_minus: 
-  forall m n : nat, n <= m -> nat_compare 0 (m - n) = nat_compare n m.
-intros m n Hle.
-apply le_lt_or_eq in Hle.
-decompose [or] Hle.
-assert (Hlt := H).
-apply nat_compare_lt in Hlt.
-rewrite Hlt.
-assert (Hlt2 := H).
-apply lt_le_S in H.
-apply (minus_le_compat_r (S n) m (S n)) in H. 
-rewrite minus_diag in H.
-rewrite NPeano.Nat.sub_succ_r in H. 
-apply NPeano.Nat.le_pred_le in H.
-assert (0 < m - n). 
-apply (plus_lt_reg_l 0 (m - n) n). 
-rewrite <- le_plus_minus.
-rewrite <- plus_n_O.
-exact Hlt2.
-apply lt_le_weak.
-exact Hlt2.
-apply nat_compare_lt in H0.
-rewrite H0.
-reflexivity.
-assert (Heq := H).
-apply (nat_compare_eq_iff n m) in H.
-rewrite H.
-rewrite Heq.
-rewrite minus_diag.
-simpl.
-reflexivity.
-Qed.
-
-Lemma nat_compare_minus_0:
-  forall m n:nat, n<=m -> nat_compare (m - n) 0 = nat_compare m n.
-intros m n.
-rewrite nat_compare_flip.
-rewrite (nat_compare_flip m n).
-intro Hlen.
-apply f_equal.
-apply nat_compare_0_minus.
-exact Hlen.
-Qed.
-
-
-Lemma nat_compare_minus: forall a n m:nat, a>=n -> a>=m -> nat_compare (a-n) (a-m) = nat_compare m n.
-intro a.
-induction a.
-intros n m Hn Hm.
-apply le_n_0_eq in Hn.
-apply le_n_0_eq in Hm.
-rewrite <- Hn.
-rewrite <- Hm.
-simpl.
-reflexivity.
-intros n m Hn Hm.
-apply le_lt_or_eq in Hn.
-apply le_lt_or_eq in Hm.
-decompose [or] Hn.
-decompose [or] Hm.
-apply lt_n_Sm_le in H.
-apply lt_n_Sm_le in H0.
-rewrite <- (minus_Sn_m a n H).
-rewrite <- (minus_Sn_m a m H0).
-rewrite nat_compare_S.
-apply IHa.
-exact H.
-exact H0.
-rewrite H0.
-rewrite minus_diag.
-apply nat_compare_minus_0.
-apply lt_le_weak.
-exact H.
-
-decompose [or] Hm.
-rewrite H.
-rewrite minus_diag.
-apply nat_compare_0_minus.
-apply lt_le_weak.
-exact H0.
-rewrite H.
-rewrite H0.
-rewrite minus_diag.
-simpl.
-assert (a=a).
-reflexivity.
-apply nat_compare_eq_iff in H1.
-rewrite H1.
-reflexivity.
+Lemma exactlyn_app_rev:
+  forall n:nat, forall L : coins, 
+    exactlyn n L
+    -> forall L1 L2 : coins,
+         L = L1 ++ L2 ->
+         exists n1 n2:nat, (exactlyn n1 L1 /\ exactlyn n2 L2 /\ n = (n1 + n2)).
+Proof.
+  intros n L H.
+  induction H.
+  intros L1 L2.
+  intro Hnil.
+  exists 0.
+  exists 0.
+  simpl.
+  symmetry in Hnil.
+  apply app_eq_nil in Hnil.
+  decompose [and] Hnil.
+  rewrite H; rewrite H0.
+  apply conj.
+  constructor.
+  apply conj.
+  constructor.
+  reflexivity.
+  intros L1 L2.
+  destruct L1.
+  simpl.
+  intro HL2.
+  rewrite<- HL2.
+  exists 0.
+  exists (S n).
+  apply conj.
+  constructor.
+  apply conj.
+  apply exactlyn_fake.
+  exact H.
+  simpl.
+  reflexivity.
+  rewrite <- app_comm_cons.
+  intro H1.
+  assert (ns = L1 ++ L2).
+  change ns with (tl (fake::ns)).
+  rewrite H1.
+  simpl; reflexivity.
+  specialize (IHexactlyn L1 L2 H0).
+  elim IHexactlyn.
+  intro n1.
+  intro Htemp.
+  elim Htemp.
+  intro n2.
+  intro Hand.
+  decompose [and] Hand.
+  exists (S n1).
+  exists n2.
+  apply conj.
+  replace c with fake.
+  apply exactlyn_fake.
+  exact H2.
+  change c with (hd fake (c :: L1 ++ L2)).
+  rewrite <- H1.
+  simpl; reflexivity.
+  apply conj.
+  exact H4.
+  simpl.
+  f_equal.
+  exact H5.
+  intros L1 L2 Happ.
+  destruct L1.
+  simpl in Happ.
+  exists 0.
+  exists n.
+  apply conj.
+  constructor.
+  apply conj.
+  rewrite <- Happ.
+  apply exactlyn_gold.
+  exact H.
+  simpl; reflexivity.
+  assert (ns = L1 ++ L2).
+  change ns with (tl (gold::ns)).
+  rewrite Happ.
+  simpl.
+  reflexivity.
+  specialize (IHexactlyn L1 L2 H0).
+  elim IHexactlyn.
+  intro n1.
+  intro Htemp.
+  elim Htemp.
+  intro n2.
+  intro Hand.
+  decompose [and] Hand.
+  exists n1; exists n2.
+  apply conj.
+  replace c with gold.
+  apply exactlyn_gold.
+  exact H1.
+  rewrite<- app_comm_cons in Happ.
+  change c with (hd gold (c :: L1 ++ L2)).
+  rewrite <- Happ.
+  simpl; reflexivity.
+  apply conj.
+  exact H3.
+  exact H4.
 Qed.
 
 Lemma weigh_split: 
   forall n:nat, forall a:coin, forall L1 L2 :coins,
     length L1 = n -> length L2 = n  -> weigh (S n) (a::L1 ++ (a::L2)) = weigh n (L1 ++ L2).
-intro n.
-induction n.
-intros a L1 L2 Hlen1 Hlen2.
-apply length_0 in Hlen1.
-apply length_0 in Hlen2.
-rewrite Hlen1; rewrite Hlen2.
-simpl.
-unfold weigh.
-unfold pick_rec.
-simpl.
-apply nat_compare_eq_iff.
-reflexivity.
-intros a L1 L2.
-destruct L1.
-intro Hlen1.
-simpl in Hlen1.
-symmetry in Hlen1.
-apply NPeano.Nat.neq_succ_0 in Hlen1.
-contradiction.
-destruct L2.
-intros Hlen1 Hlen2.
-symmetry in Hlen2.
-simpl in Hlen2.
-apply NPeano.Nat.neq_succ_0 in Hlen2.
-contradiction.
-intro Hlen1; simpl in Hlen1.
-intro Hlen2; simpl in Hlen2.
-unfold weigh in IHn.
-specialize (IHn a L1 L2).
-rewrite (surjective_pairing (pick_rec coin (S n) (a :: L1 ++ a :: L2))) in IHn.
-rewrite app_comm_cons in IHn.
-rewrite snd_pick_rec in IHn.
-rewrite fst_pick_rec_app in IHn.
-rewrite (surjective_pairing (pick_rec coin (S n) _ )) in IHn.
-rewrite fst_pick_rec in IHn.
-apply eq_add_S in Hlen1.
-apply eq_add_S in Hlen2.
-specialize (IHn Hlen1 Hlen2).
-rewrite (surjective_pairing (pick_rec coin n (L1 ++ L2))) in IHn.
-rewrite fst_pick_rec_app in IHn.
-rewrite (surjective_pairing (pick_rec coin n _)) in IHn.
-rewrite snd_pick_rec in IHn.
-rewrite fst_pick_rec in IHn.
-unfold weigh.
-rewrite (surjective_pairing (pick_rec coin (S (S n)) (a::(c :: L1) ++ a::c0::L2))).
-rewrite app_comm_cons.
-rewrite snd_pick_rec.
-rewrite fst_pick_rec_app.
-rewrite (surjective_pairing (pick_rec coin (S (S n)) _)).
-rewrite fst_pick_rec.
-rewrite (surjective_pairing (pick_rec coin (S n) _)).
-rewrite snd_pick_rec.
-rewrite fst_pick_rec_app.
-rewrite (surjective_pairing (pick_rec _ (S n) _)).
-rewrite fst_pick_rec.
-rewrite sum_cons.
-rewrite sum_cons.
-rewrite sum_cons; rewrite sum_cons.
-rewrite plus_assoc.
-rewrite plus_assoc.
-rewrite <-  plus_assoc.
-rewrite <- plus_assoc.
-rewrite nat_compare_plus.
-reflexivity.
-simpl; auto.
-simpl; auto.
-simpl; auto.
-simpl; auto.
-simpl; auto.
-simpl; auto.
-auto.
-simpl;auto.
-simpl;auto.
-simpl;auto.
-simpl;auto.
-simpl;auto.
-Qed.
-
-Lemma length_nil_S: forall A:Type, forall n:nat, length ([]:list A) = S n -> False.
-intros A N H.
-simpl in H.
-symmetry in H.
-apply NPeano.Nat.neq_succ_0 in H.
-exact H.
+Proof.
+  intro n.
+  induction n.
+  intros a L1 L2 Hlen1 Hlen2.
+  apply length_0 in Hlen1.
+  apply length_0 in Hlen2.
+  rewrite Hlen1; rewrite Hlen2.
+  simpl.
+  unfold weigh.
+  unfold pick_rec.
+  simpl.
+  apply nat_compare_eq_iff.
+  reflexivity.
+  intros a L1 L2.
+  destruct L1.
+  intro Hlen1.
+  simpl in Hlen1.
+  symmetry in Hlen1.
+  apply NPeano.Nat.neq_succ_0 in Hlen1.
+  contradiction.
+  destruct L2.
+  intros Hlen1 Hlen2.
+  symmetry in Hlen2.
+  simpl in Hlen2.
+  apply NPeano.Nat.neq_succ_0 in Hlen2.
+  contradiction.
+  intro Hlen1; simpl in Hlen1.
+  intro Hlen2; simpl in Hlen2.
+  unfold weigh in IHn.
+  specialize (IHn a L1 L2).
+  rewrite (surjective_pairing (pick_rec coin (S n) (a :: L1 ++ a :: L2))) in IHn.
+  rewrite app_comm_cons in IHn.
+  rewrite snd_pick_rec in IHn.
+  rewrite fst_pick_rec_app in IHn.
+  rewrite (surjective_pairing (pick_rec coin (S n) _ )) in IHn.
+  rewrite fst_pick_rec in IHn.
+  apply eq_add_S in Hlen1.
+  apply eq_add_S in Hlen2.
+  specialize (IHn Hlen1 Hlen2).
+  rewrite (surjective_pairing (pick_rec coin n (L1 ++ L2))) in IHn.
+  rewrite fst_pick_rec_app in IHn.
+  rewrite (surjective_pairing (pick_rec coin n _)) in IHn.
+  rewrite snd_pick_rec in IHn.
+  rewrite fst_pick_rec in IHn.
+  unfold weigh.
+  rewrite (surjective_pairing (pick_rec coin (S (S n)) (a::(c :: L1) ++ a::c0::L2))).
+  rewrite app_comm_cons.
+  rewrite snd_pick_rec.
+  rewrite fst_pick_rec_app.
+  rewrite (surjective_pairing (pick_rec coin (S (S n)) _)).
+  rewrite fst_pick_rec.
+  rewrite (surjective_pairing (pick_rec coin (S n) _)).
+  rewrite snd_pick_rec.
+  rewrite fst_pick_rec_app.
+  rewrite (surjective_pairing (pick_rec _ (S n) _)).
+  rewrite fst_pick_rec.
+  rewrite sum_cons.
+  rewrite sum_cons.
+  rewrite sum_cons; rewrite sum_cons.
+  rewrite plus_assoc.
+  rewrite plus_assoc.
+  rewrite <-  plus_assoc.
+  rewrite <- plus_assoc.
+  rewrite nat_compare_plus.
+  reflexivity.
+  simpl; auto.
+  simpl; auto.
+  simpl; auto.
+  simpl; auto.
+  simpl; auto.
+  simpl; auto.
+  auto.
+  simpl;auto.
+  simpl;auto.
+  simpl;auto.
+  simpl;auto.
+  simpl;auto.
 Qed.
 
 Lemma exactlyn_sum: 
   forall L:coins, forall n:nat,
     exactlyn n L -> (coin_sum L) = n + 2 * ((length L) - n).
-intros L n Hex.
-induction Hex.
-simpl; reflexivity.
-simpl.
-unfold coin_sum.
-simpl.
-f_equal.
-unfold coin_sum in IHHex.
-simpl in IHHex.
-exact IHHex.
-simpl.
-destruct n.
-simpl.
-rewrite<- plus_Snm_nSm.
-rewrite plus_Sn_m.
-unfold coin_sum.
-simpl.
-f_equal.
-f_equal.
-unfold coin_sum in IHHex.
-simpl in IHHex.
-simpl in IHHex.
-replace (length ns - 0) with (length ns) in IHHex.
-exact IHHex.
-rewrite<- minus_n_O.
-reflexivity.
-unfold coin_sum.
-simpl.
-simpl in IHHex.
-unfold coin_sum in IHHex.
-rewrite IHHex.
-simpl.
-f_equal.
-rewrite plus_n_Sm.
-rewrite plus_n_Sm.
-f_equal.
-rewrite <- plus_Sn_m.
-rewrite NPeano.Nat.sub_succ_r.
-rewrite <-  (S_pred (length ns -  n) 0).
-rewrite plus_n_Sm.
-rewrite <- plus_Sn_m.
-rewrite <- (S_pred (length ns - n) 0).
-reflexivity.
-
-apply exactlyn_len in Hex.
-apply (minus_le_compat_r (S n) (length ns) n) in Hex.
-rewrite <- minus_Sn_m in Hex.
-rewrite NPeano.Nat.sub_diag in Hex.
-apply le_lt_n_Sm in Hex.
-apply lt_S_n in Hex.
-exact Hex.
-auto.
-
-apply exactlyn_len in Hex.
-apply (minus_le_compat_r (S n) (length ns) n) in Hex.
-rewrite <- minus_Sn_m in Hex.
-rewrite NPeano.Nat.sub_diag in Hex.
-apply le_lt_n_Sm in Hex.
-apply lt_S_n in Hex.
-exact Hex.
-auto.
-
+Proof.
+  intros L n Hex.
+  induction Hex.
+  simpl; reflexivity.
+  simpl.
+  unfold coin_sum.
+  simpl.
+  f_equal.
+  unfold coin_sum in IHHex.
+  simpl in IHHex.
+  exact IHHex.
+  simpl.
+  destruct n.
+  simpl.
+  rewrite<- plus_Snm_nSm.
+  rewrite plus_Sn_m.
+  unfold coin_sum.
+  simpl.
+  f_equal.
+  f_equal.
+  unfold coin_sum in IHHex.
+  simpl in IHHex.
+  simpl in IHHex.
+  replace (length ns - 0) with (length ns) in IHHex.
+  exact IHHex.
+  rewrite<- minus_n_O.
+  reflexivity.
+  unfold coin_sum.
+  simpl.
+  simpl in IHHex.
+  unfold coin_sum in IHHex.
+  rewrite IHHex.
+  simpl.
+  f_equal.
+  rewrite plus_n_Sm.
+  rewrite plus_n_Sm.
+  f_equal.
+  rewrite <- plus_Sn_m.
+  rewrite NPeano.Nat.sub_succ_r.
+  rewrite <-  (S_pred (length ns -  n) 0).
+  rewrite plus_n_Sm.
+  rewrite <- plus_Sn_m.
+  rewrite <- (S_pred (length ns - n) 0).
+  reflexivity.
+  
+  apply exactlyn_len in Hex.
+  apply (minus_le_compat_r (S n) (length ns) n) in Hex.
+  rewrite <- minus_Sn_m in Hex.
+  rewrite NPeano.Nat.sub_diag in Hex.
+  apply le_lt_n_Sm in Hex.
+  apply lt_S_n in Hex.
+  exact Hex.
+  auto.
+  
+  apply exactlyn_len in Hex.
+  apply (minus_le_compat_r (S n) (length ns) n) in Hex.
+  rewrite <- minus_Sn_m in Hex.
+  rewrite NPeano.Nat.sub_diag in Hex.
+  apply le_lt_n_Sm in Hex.
+  apply lt_S_n in Hex.
+  exact Hex.
+  auto.
 Qed.
 
 Lemma exactlyn_nat_compare: 
@@ -1512,25 +1199,26 @@ Lemma exactlyn_nat_compare:
     exactlyn n1 L1 ->
     exactlyn n2 L2 ->
     nat_compare (coin_sum L1) (coin_sum L2) = nat_compare n2 n1.
-intros L1 L2 n1 n2 Hlen Hex1 Hex2.
-rewrite (exactlyn_sum L1 n1 Hex1).
-rewrite (exactlyn_sum L2 n2 Hex2).
-rewrite Hlen.
-apply exactlyn_len in Hex1.
-apply exactlyn_len in Hex2.
-rewrite Hlen in Hex1.
-simpl.
-rewrite plus_assoc.
-rewrite plus_assoc.
-rewrite plus_assoc.
-rewrite plus_assoc.
-rewrite <- plus_n_O.
-rewrite <- plus_n_O.
-rewrite <- (le_plus_minus n1 (length L2) Hex1).
-rewrite <- (le_plus_minus n2 (length L2) Hex2).
-rewrite nat_compare_plus.
-rewrite (nat_compare_minus (length L2) n1 n2 Hex1 Hex2).
-reflexivity.
+Proof.
+  intros L1 L2 n1 n2 Hlen Hex1 Hex2.
+  rewrite (exactlyn_sum L1 n1 Hex1).
+  rewrite (exactlyn_sum L2 n2 Hex2).
+  rewrite Hlen.
+  apply exactlyn_len in Hex1.
+  apply exactlyn_len in Hex2.
+  rewrite Hlen in Hex1.
+  simpl.
+  rewrite plus_assoc.
+  rewrite plus_assoc.
+  rewrite plus_assoc.
+  rewrite plus_assoc.
+  rewrite <- plus_n_O.
+  rewrite <- plus_n_O.
+  rewrite <- (le_plus_minus n1 (length L2) Hex1).
+  rewrite <- (le_plus_minus n2 (length L2) Hex2).
+  rewrite nat_compare_plus.
+  rewrite (nat_compare_minus (length L2) n1 n2 Hex1 Hex2).
+  reflexivity.
 Qed.
 
 Lemma weigh_defn : 
@@ -1541,200 +1229,193 @@ Lemma weigh_defn :
       exactlyn n1 L1 ->
       exactlyn n2 L2 ->
       weigh n (L1 ++ L2) = nat_compare n2 n1.
-intros n L1 L2 Hlen1 Hlen2 n1 n2 Hex1 Hex2.
-unfold weigh.
-rewrite (surjective_pairing (pick_rec _ n _)).
-rewrite (snd_pick_rec _ L1 _ _  Hlen1).
-rewrite (surjective_pairing (pick_rec _ n _)).
-rewrite (fst_pick_rec_app _ n _ _ Hlen1).
-rewrite (surjective_pairing (pick_rec _ n L2)).
-rewrite (fst_pick_rec _ L2 n Hlen2).
-assert (length L1 = length L2).
-rewrite Hlen1; rewrite Hlen2; reflexivity.
-apply (exactlyn_nat_compare L1 L2 n1 n2 H Hex1 Hex2).
+Proof.
+  intros n L1 L2 Hlen1 Hlen2 n1 n2 Hex1 Hex2.
+  unfold weigh.
+  rewrite (surjective_pairing (pick_rec _ n _)).
+  rewrite (snd_pick_rec _ L1 _ _  Hlen1).
+  rewrite (surjective_pairing (pick_rec _ n _)).
+  rewrite (fst_pick_rec_app _ n _ _ Hlen1).
+  rewrite (surjective_pairing (pick_rec _ n L2)).
+  rewrite (fst_pick_rec _ L2 n Hlen2).
+  assert (length L1 = length L2).
+  rewrite Hlen1; rewrite Hlen2; reflexivity.
+  apply (exactlyn_nat_compare L1 L2 n1 n2 H Hex1 Hex2).
 Qed.
 
 Lemma weigh_eq: 
   forall L : coins,
     exactlyn 0 L -> forall n:nat, (n+n = length L) -> weigh n L = Eq.
-intros L Hex n Hlen.
-assert (Htriv:length L = length L).
-reflexivity.
-symmetry in Hlen.
-elim (breakup (length L) n n Hlen coin L Htriv).
-intros L1 H2.
-elim H2.
-intros L2 Hprops.
-decompose [and] Hprops.
-rewrite H.
-elim (exactlyn_app_rev 0 L Hex L1 L2).
-intros n1 Ht.
-elim Ht.
-intros n2 Hx.
-decompose [and] Hx.
-symmetry in H6.
-clear Hx.
-apply plus_is_O in H6.
-decompose [and] H6.
-rewrite H4 in H0.
-rewrite H7 in H5.
-rewrite (weigh_defn n L1 L2 H1 H3 0 0 H0 H5).
-simpl.
-reflexivity.
-exact H.
+Proof.
+  intros L Hex n Hlen.
+  assert (Htriv:length L = length L).
+  reflexivity.
+  symmetry in Hlen.
+  elim (breakup (length L) n n Hlen coin L Htriv).
+  intros L1 H2.
+  elim H2.
+  intros L2 Hprops.
+  decompose [and] Hprops.
+  rewrite H.
+  elim (exactlyn_app_rev 0 L Hex L1 L2).
+  intros n1 Ht.
+  elim Ht.
+  intros n2 Hx.
+  decompose [and] Hx.
+  symmetry in H6.
+  clear Hx.
+  apply plus_is_O in H6.
+  decompose [and] H6.
+  rewrite H4 in H0.
+  rewrite H7 in H5.
+  rewrite (weigh_defn n L1 L2 H1 H3 0 0 H0 H5).
+  simpl.
+  reflexivity.
+  exact H.
 Qed.
-
  
-Lemma hd_app: forall A:Type, forall L1 L2: list A, forall a : A, 
-    length L1 > 0 -> hd a (L1 ++ L2) = hd a L1.            
-intros A L1 L2 a Hlen.
-destruct L1.
-simpl in Hlen.
-apply gt_irrefl in Hlen.
-contradiction.
-simpl.
-reflexivity.
-Qed.
-
-
 (* If we are even more ambitious we can also prove that p12 works as expected. *)
-Lemma p12Works: forall ns :coins, (length ns = 12) -> (exactlyn 1 ns) -> ((hd gold (procEval p12 ns)) = fake).
-intros ns Hlen.
-unfold p12.
-unfold procEval.
-fold procEval.
-assert (H12 : (12 = 8 + 4)).
-auto.
-elim (breakup 12 8 4 H12 coin ns Hlen).
-intros L8.
-intro H1; elim H1.
-intro L4.
-intro H2; elim H2.
-intro Hcombine.
-intro H3; elim H3.
-intros H8len H4len.
-intro Hns.
-elim (exactlyn_app_rev 1 ns Hns L8 L4 Hcombine).
-intro n1.
-intro Hsimpl.
-elim Hsimpl.
-intro n2.
-intro Hcc.
-decompose [and] Hcc.
-assert (H8: 8 = 4 + 4).
-auto.
-elim (breakup 8 4 4 H8 coin L8 H8len).
-intro L41.
-intro H1'; elim H1'.
-intro L42.
-intro Hcombine'.
-decompose [and] Hcombine'.
-rewrite Hcombine.
-elim (exactlyn_app_rev n1 L8 H L41 L42 H0). 
-intro n11.
-intro Hex.
-elim Hex.
-intro n21.
-intro Hex2.
-decompose [and] Hex2.
-clear H1 H2 Hsimpl H1' Hcombine' Hex H3 Hcc Hex2.
-symmetry in H5.
-apply NPeano.Nat.eq_add_1 in H5.
-elim H5.
-intro Hn1n2.
-decompose [and] Hn1n2.
-clear Hn1n2.
-rewrite H2 in H4.
-rewrite H1 in H.
-rewrite H0.
-assert (4 + 4 <= (length (L41 ++ L42))).
-rewrite app_length.
-rewrite H7; rewrite H9.
-simpl.
-apply le_refl.
-rewrite<- (weigh_tl 4 (L41 ++ L42) L4 H3). 
-rewrite (weigh_defn 4 L41 L42 H7 H9 n11 n21 H6 H11).
-rewrite H1 in H13.
-symmetry in H13.
-apply NPeano.Nat.eq_add_1 in H13.
-decompose [or] H13.
-decompose [and] H10.
-rewrite H14.
-rewrite H15.
-Arguments procEval : simpl nomatch.
-simpl.
-rewrite<- app_assoc.
-rewrite procDepth_tl.
-rewrite hd_app.
-rewrite p4Works.
-reflexivity.
-exact H7.
-rewrite H14 in H6.
-exact H6.
-rewrite<- procEval_length.
-rewrite H7.
-apply gt_Sn_O.
-simpl.
-rewrite H7.
-apply le_refl.
-(* Start of second case *)
-decompose [and] H10.
-rewrite H14; rewrite H15.
-simpl.
-rewrite (swap_tl coin (L41 ++ L42) L4 4 4 H3).
-rewrite<- H7 at 1.
-rewrite<- H9 at 1.
-rewrite swap_app.
-rewrite procDepth_tl.
-rewrite hd_app.
-rewrite procDepth_tl.
-rewrite hd_app.
-rewrite p4Works.
-reflexivity.
-exact H9.
-rewrite H15 in H11.
-exact H11.
-rewrite<- procEval_length.
-rewrite H9.
-apply gt_Sn_O.
-simpl.
-rewrite H9.
-apply le_refl.
-rewrite<- procEval_length.
-rewrite app_length.
-rewrite H7; rewrite H9.
-simpl.
-apply gt_Sn_O.
-simpl.
-rewrite app_length.
-rewrite H7; rewrite H9; simpl.
-auto.
-intro Hf.
-decompose [and] Hf.
-rewrite H2 in H4.
-rewrite H1 in H.
-rewrite<- weigh_tl. 
-symmetry in H8len.
-rewrite (weigh_eq L8 H 4 H8len).
-rewrite H8len.
-rewrite<- H4len.
-rewrite (swap_app _ L8 L4).
-rewrite procDepth_tl.
-rewrite hd_app.
-apply p4Works.
-exact H4len.
-exact H4.
-rewrite <- procEval_length.
-rewrite H4len.
-apply gt_Sn_O.
-simpl.
-rewrite H4len.
-apply le_refl.
-rewrite H8len.
-simpl.
-apply le_refl.
+Lemma p12Works:
+  forall ns :coins,
+    (length ns = 12)
+    -> (exactlyn 1 ns)
+    -> ((hd gold (procEval p12 ns)) = fake).
+Proof.
+  intros ns Hlen.
+  unfold p12.
+  unfold procEval.
+  fold procEval.
+  assert (H12 : (12 = 8 + 4)).
+  auto.
+  elim (breakup 12 8 4 H12 coin ns Hlen).
+  intros L8.
+  intro H1; elim H1.
+  intro L4.
+  intro H2; elim H2.
+  intro Hcombine.
+  intro H3; elim H3.
+  intros H8len H4len.
+  intro Hns.
+  elim (exactlyn_app_rev 1 ns Hns L8 L4 Hcombine).
+  intro n1.
+  intro Hsimpl.
+  elim Hsimpl.
+  intro n2.
+  intro Hcc.
+  decompose [and] Hcc.
+  assert (H8: 8 = 4 + 4).
+  auto.
+  elim (breakup 8 4 4 H8 coin L8 H8len).
+  intro L41.
+  intro H1'; elim H1'.
+  intro L42.
+  intro Hcombine'.
+  decompose [and] Hcombine'.
+  rewrite Hcombine.
+  elim (exactlyn_app_rev n1 L8 H L41 L42 H0). 
+  intro n11.
+  intro Hex.
+  elim Hex.
+  intro n21.
+  intro Hex2.
+  decompose [and] Hex2.
+  clear H1 H2 Hsimpl H1' Hcombine' Hex H3 Hcc Hex2.
+  symmetry in H5.
+  apply NPeano.Nat.eq_add_1 in H5.
+  elim H5.
+  intro Hn1n2.
+  decompose [and] Hn1n2.
+  clear Hn1n2.
+  rewrite H2 in H4.
+  rewrite H1 in H.
+  rewrite H0.
+  assert (4 + 4 <= (length (L41 ++ L42))).
+  rewrite app_length.
+  rewrite H7; rewrite H9.
+  simpl.
+  apply le_refl.
+  rewrite<- (weigh_tl 4 (L41 ++ L42) L4 H3). 
+  rewrite (weigh_defn 4 L41 L42 H7 H9 n11 n21 H6 H11).
+  rewrite H1 in H13.
+  symmetry in H13.
+  apply NPeano.Nat.eq_add_1 in H13.
+  decompose [or] H13.
+  decompose [and] H10.
+  rewrite H14.
+  rewrite H15.
+  Arguments procEval : simpl nomatch.
+  simpl.
+  rewrite<- app_assoc.
+  rewrite procDepth_tl.
+  rewrite hd_app.
+  rewrite p4Works.
+  reflexivity.
+  exact H7.
+  rewrite H14 in H6.
+  exact H6.
+  rewrite<- procEval_length.
+  rewrite H7.
+  apply gt_Sn_O.
+  simpl.
+  rewrite H7.
+  apply le_refl.
+  (* Start of second case *)
+  decompose [and] H10.
+  rewrite H14; rewrite H15.
+  simpl.
+  rewrite (swap_tl coin (L41 ++ L42) L4 4 4 H3).
+  rewrite<- H7 at 1.
+  rewrite<- H9 at 1.
+  rewrite swap_app.
+  rewrite procDepth_tl.
+  rewrite hd_app.
+  rewrite procDepth_tl.
+  rewrite hd_app.
+  rewrite p4Works.
+  reflexivity.
+  exact H9.
+  rewrite H15 in H11.
+  exact H11.
+  rewrite<- procEval_length.
+  rewrite H9.
+  apply gt_Sn_O.
+  simpl.
+  rewrite H9.
+  apply le_refl.
+  rewrite<- procEval_length.
+  rewrite app_length.
+  rewrite H7; rewrite H9.
+  simpl.
+  apply gt_Sn_O.
+  simpl.
+  rewrite app_length.
+  rewrite H7; rewrite H9; simpl.
+  auto.
+  intro Hf.
+  decompose [and] Hf.
+  rewrite H2 in H4.
+  rewrite H1 in H.
+  rewrite<- weigh_tl. 
+  symmetry in H8len.
+  rewrite (weigh_eq L8 H 4 H8len).
+  rewrite H8len.
+  rewrite<- H4len.
+  rewrite (swap_app _ L8 L4).
+  rewrite procDepth_tl.
+  rewrite hd_app.
+  apply p4Works.
+  exact H4len.
+  exact H4.
+  rewrite <- procEval_length.
+  rewrite H4len.
+  apply gt_Sn_O.
+  simpl.
+  rewrite H4len.
+  apply le_refl.
+  rewrite H8len.
+  simpl.
+  apply le_refl.
 Qed.
-
 
 (** * Inversion.
 
@@ -1773,91 +1454,92 @@ Lemma procEvalInv_compose:
   forall p : proc, forall L : list coins, forall gInv : coins,
     In gInv (procEvalInv p L) 
     -> (exists g : coins,  In g L /\ In gInv (procEvalInv p [g])).
-induction p.
-simpl.
-intros L gInv Hin.
-exists gInv.
-apply conj.
-exact Hin.
-left; reflexivity.
-simpl.
-intros L gInv Hin.
-apply in_map_iff in Hin.
-elim Hin.
-intro gx.
-intro Hand.
-decompose [and] Hand.
-rewrite<- H.
-elim (IHp L gx).
-intros g Hand2.
-decompose [and] Hand2.
-exists g.
-apply conj.
-exact H1.
-set (fm := (fun g0:coins => swap coin g0 n0 n)).
-replace (swap coin gx n0 n) with (fm gx).
-apply in_map.
-exact H2.
-unfold fm.
-reflexivity.
-exact H0.
-simpl.
-intros L gInv.
-intro Hin.
-apply in_app_or in Hin.
-decompose [or] Hin.
-rewrite filter_In in H.
-decompose [and] H.
-elim (IHp1 L gInv).
-intros g H2.
-exists g.
-apply conj.
-decompose [and] H2.
-exact H3.
-apply in_or_app.
-left.
-apply filter_In.
-apply conj.
-decompose [and] H2.
-exact H4.
-exact H1.
-exact H0.
-clear Hin.
-apply in_app_or in H.
-decompose [or] H.
-clear H.
-rewrite filter_In in H0.
-decompose [and] H0.
-elim (IHp2 L gInv).
-intros g H2.
-exists g.
-apply conj.
-decompose [and] H2.
-exact H3.
-apply in_or_app; right; apply in_or_app.
-left.
-apply filter_In.
-apply conj.
-decompose [and] H2.
-exact H4.
-exact H1.
-exact H.
-clear H.
-rewrite filter_In in H0.
-decompose [and] H0.
-elim (IHp3 L gInv).
-intros g H2.
-exists g.
-apply conj.
-decompose [and] H2.
-exact H3.
-apply in_or_app; right; apply in_or_app; right.
-apply filter_In.
-apply conj.
-decompose [and] H2.
-exact H4.
-exact H1.
-exact H.
+Proof.
+  induction p.
+  simpl.
+  intros L gInv Hin.
+  exists gInv.
+  apply conj.
+  exact Hin.
+  left; reflexivity.
+  simpl.
+  intros L gInv Hin.
+  apply in_map_iff in Hin.
+  elim Hin.
+  intro gx.
+  intro Hand.
+  decompose [and] Hand.
+  rewrite<- H.
+  elim (IHp L gx).
+  intros g Hand2.
+  decompose [and] Hand2.
+  exists g.
+  apply conj.
+  exact H1.
+  set (fm := (fun g0:coins => swap coin g0 n0 n)).
+  replace (swap coin gx n0 n) with (fm gx).
+  apply in_map.
+  exact H2.
+  unfold fm.
+  reflexivity.
+  exact H0.
+  simpl.
+  intros L gInv.
+  intro Hin.
+  apply in_app_or in Hin.
+  decompose [or] Hin.
+  rewrite filter_In in H.
+  decompose [and] H.
+  elim (IHp1 L gInv).
+  intros g H2.
+  exists g.
+  apply conj.
+  decompose [and] H2.
+  exact H3.
+  apply in_or_app.
+  left.
+  apply filter_In.
+  apply conj.
+  decompose [and] H2.
+  exact H4.
+  exact H1.
+  exact H0.
+  clear Hin.
+  apply in_app_or in H.
+  decompose [or] H.
+  clear H.
+  rewrite filter_In in H0.
+  decompose [and] H0.
+  elim (IHp2 L gInv).
+  intros g H2.
+  exists g.
+  apply conj.
+  decompose [and] H2.
+  exact H3.
+  apply in_or_app; right; apply in_or_app.
+  left.
+  apply filter_In.
+  apply conj.
+  decompose [and] H2.
+  exact H4.
+  exact H1.
+  exact H.
+  clear H.
+  rewrite filter_In in H0.
+  decompose [and] H0.
+  elim (IHp3 L gInv).
+  intros g H2.
+  exists g.
+  apply conj.
+  decompose [and] H2.
+  exact H3.
+  apply in_or_app; right; apply in_or_app; right.
+  apply filter_In.
+  apply conj.
+  decompose [and] H2.
+  exact H4.
+  exact H1.
+  exact H.
 Qed.
 
 (* Use swap_app and breakup for case where length is equal to m+n.
@@ -1866,50 +1548,51 @@ Qed.
 Lemma swapInv_len_eq: 
   forall A : Type, forall L : list A, forall n m : nat,
     (length L = (n+m)) -> swap A (swap A L n m) m n = L.
-intros A L n m Hlen.
-elim (breakup (length L) n m Hlen A L).
-intros Ln HLm.
-elim HLm.
-intros Lm Hnm.
-decompose [and] Hnm.
-rewrite H.
-rewrite<- H1.
-rewrite<- H2.
-rewrite swap_app.
-rewrite swap_app.
-f_equal.
-reflexivity.
+Proof.
+  intros A L n m Hlen.
+  elim (breakup (length L) n m Hlen A L).
+  intros Ln HLm.
+  elim HLm.
+  intros Lm Hnm.
+  decompose [and] Hnm.
+  rewrite H.
+  rewrite<- H1.
+  rewrite<- H2.
+  rewrite swap_app.
+  rewrite swap_app.
+  f_equal.
+  reflexivity.
 Qed.
 
 Lemma swapInv_len_geq: 
   forall A : Type, forall L : list A, forall n m : nat,
     (length L >= (n+m)) -> swap A (swap A L n m) m n = L.
-intros A L n m Hlen.
-elim (NPeano.Nat.le_exists_sub (n+m)(length L)).
-intros p Hp.
-decompose [and] Hp.
-rewrite plus_comm in H.
-elim (breakup (length L) (n + m) p H A L).
-intros Lmn HLmn.
-elim HLmn.
-intros Lp HLp.
-decompose [and] HLp.
-rewrite H1.
-rewrite swap_tl.
-rewrite swap_tl.
-f_equal.
-apply swapInv_len_eq.
-exact H3.
-rewrite<- swap_length.
-rewrite plus_comm.
-erewrite H3.
-reflexivity.
-rewrite H3.
-reflexivity.
-reflexivity.
-exact Hlen.
+Proof.
+  intros A L n m Hlen.
+  elim (NPeano.Nat.le_exists_sub (n+m)(length L)).
+  intros p Hp.
+  decompose [and] Hp.
+  rewrite plus_comm in H.
+  elim (breakup (length L) (n + m) p H A L).
+  intros Lmn HLmn.
+  elim HLmn.
+  intros Lp HLp.
+  decompose [and] HLp.
+  rewrite H1.
+  rewrite swap_tl.
+  rewrite swap_tl.
+  f_equal.
+  apply swapInv_len_eq.
+  exact H3.
+  rewrite<- swap_length.
+  rewrite plus_comm.
+  erewrite H3.
+  reflexivity.
+  rewrite H3.
+  reflexivity.
+  reflexivity.
+  exact Hlen.
 Qed.
-
 
 (* First we show that procEvalInv contains all possible inputs. We
 call this property being full. *)
@@ -1917,8 +1600,8 @@ call this property being full. *)
 Lemma procEvalInv_is_full :
   forall p:proc,forall g:coins, 
     (procDepth p <= length g) -> 
-    (List.In g (procEvalInv p [procEval p g]))
-.
+    (List.In g (procEvalInv p [procEval p g])).
+Proof.
   intro p.
   induction p.
   simpl.
@@ -2004,6 +1687,7 @@ Qed.
 Lemma procEvalInv_length:
   forall p:proc, forall g gInv :coins,
     In gInv (procEvalInv p [g]) -> (length gInv = length g).
+Proof.
   intros p g.
   induction p.
   simpl.
@@ -2043,75 +1727,13 @@ Lemma procEvalInv_length:
   exact H1.
 Qed.
 
-Lemma max_lub_4: forall a b c d m : nat,
-            max a (max (max b c) d) <= m -> a <= m /\ b <= m /\ c <= m /\ d <= m.
-  intros a b c d m H.
-  apply conj.
-  apply Max.max_lub_l in H.
-  exact H.
-  apply conj.
-  apply Max.max_lub_r in H.
-  apply Max.max_lub_l in H.
-  apply Max.max_lub_l in H.
-  exact H.
-  apply conj.
-  apply Max.max_lub_r in H.
-  apply Max.max_lub_l in H.
-  apply Max.max_lub_r in H.
-  exact H.
-  apply Max.max_lub_r in H.
-  apply Max.max_lub_r in H.
-  exact H.
-Qed.
-
-Lemma in_filter_app3: 
-  forall A:Type, forall f1 f2 f3: A -> bool, forall L1 L2 L3: list A, forall a:A,
-    In a ((filter f1 L1) ++ (filter f2 L2) ++ (filter f3 L3)) <->
-        (In a L1 /\ (f1 a = true)) \/ 
-        (In a L2 /\ (f2 a = true)) \/ 
-        (In a L3 /\ (f3 a = true)).
-  intros A f1 f2 f3 L1 L2 L3 a.
-  apply conj.
-  intro H.
-  apply in_app_or in H.
-  decompose [or] H.
-  apply filter_In in H0.
-  auto.
-  apply in_app_or in H0.
-  decompose [or] H0.
-  apply filter_In in H1.
-  auto.
-  apply filter_In in H1.
-  auto.
-  intro H.
-  apply in_or_app.
-  elim H.
-  intro H1.
-  left.
-  apply filter_In.
-  exact H1.
-  intro H2or3.
-  elim H2or3.
-  intro H2.
-  right.
-  apply in_or_app.
-  left.
-  apply filter_In.
-  exact H2.
-  intro H3.
-  right.
-  apply in_or_app.
-  right.
-  apply filter_In.
-  exact H3.
-Qed.
-
 (* Now we directly show that procEvalInv is an inverse.  *)
 Lemma procEvalInv_is_inverse : 
   forall p:proc, forall g gInv:coins,
     (procDepth p <= length g) ->
     In gInv (procEvalInv p [g]) -> 
     procEval p gInv = g.
+Proof.
   intro p.
   induction p.
   simpl.
@@ -2179,6 +1801,7 @@ Theorem procEvalInv_is_full_inverse:
   forall p:proc, forall g gInv:coins,
     (procDepth p <= length g) -> 
     ((In gInv (procEvalInv p [g])) <-> (procEval p gInv = g)).
+Proof.
   intros p g gInv Hlen.
   apply conj.
   apply procEvalInv_is_inverse.
@@ -2194,56 +1817,19 @@ Theorem procEvalInv_is_full_inverse:
   exact Hlen.
 Qed.
 
-Lemma filter_length: 
-  forall A:Type, forall f: A -> bool, forall L : list A,
-    length (filter f L) <= length L.
-  intros A f L.
-  induction L.
-  simpl.
-  reflexivity.
-  unfold filter.
-  fold filter.
-  destruct (f a).
-  simpl.
-  apply le_n_S.
-  exact IHL.
-  simpl.
-  apply le_S.
-  exact IHL.
-Qed.
-
 (* We have established that procEvalInv is a real inverse function.
 Now it remains to show that the output of procEvalInv has no
 duplicates, and to bound the number of elements in the output of
 procEvalInv. *)
 
-Lemma pow_max: 
-  forall a n m:nat, 
-    a<>0 ->
-    a ^ (max n m) = (max (a ^ n) (a ^ m)).
-  intros a n m Ha.
-  rewrite Nat.max_mono.
-  reflexivity.
-  unfold Morphisms.Proper.
-  unfold Morphisms.respectful.
-  intros x y.
-  intro H.
-  rewrite H.
-  reflexivity.
-  unfold Morphisms.Proper; unfold Morphisms.respectful.
-  intros x y Hle.
-  apply Nat.pow_le_mono_r.
-  exact Ha.
-  exact Hle.
-Qed.
-
-(* This lemma shows that the inverse function produces less than 3*(#
-of uses of the scale). For a procedure to work, it must produce every
-possible input from the one correct output. *)
+(* This lemma shows that the inverse function produces less than 3 *
+(the number of uses of the scale). For a procedure to work, it must
+produce every possible input from the one correct output. *)
 
 Lemma procEvalInv_length_bound: 
   forall p:proc, forall g:coins,
     length (procEvalInv p [g]) <= 3 ^ (procCost p).
+Proof.
   intro p.
   induction p.
   intro g.
@@ -2287,12 +1873,12 @@ Qed.
 Eventually we want to use a cardinality argument to place a bound on
 the number of weighings that are needed. If we prove there are no
 duplicates then our bound will be better. *)
-
 Lemma swap_unique: 
   forall A:Type, forall L1 L2 : list A, forall n m : nat,
     (n+m) <= (min (length L1) (length L2)) 
     -> (swap A L1 n m) = (swap A L2 n m)
     -> L1 = L2.
+Proof.
   intros A L1 L2 n m Hlen Heq.
   apply Nat.min_glb_iff in Hlen.
   decompose [and] Hlen.
@@ -2302,202 +1888,12 @@ Lemma swap_unique:
   exact Heq.
 Qed.
 
-(* Prove a basic prooperty of NoDup and map. *)
-Lemma NoDup_map: 
-  forall A B:Type, forall f:A -> B, forall L:list A,
-    (forall a1 a2 : A, In a1 L -> In a2 L -> (f a1) = (f a2) -> a1 = a2)
-    -> NoDup L -> NoDup (map f L).
-  intros A B.
-  induction L.
-  intros H1 H2; simpl; apply NoDup_nil.
-  intros Hf.
-  inversion 1.
-  simpl.
-  apply NoDup_cons.
-  intro Hc.
-  apply in_map_iff in Hc.
-  elim Hc.
-  intros a1.
-  intro Ht.
-  decompose [and] Ht.
-  apply Hf in H4.
-  rewrite H4 in H5.
-  generalize H5.
-  exact H2.
-  apply in_cons.
-  exact H5.
-  apply in_eq.
-  apply IHL.
-  intros a1 a2 Ha1 Ha2.
-  apply Hf.
-  apply in_cons.
-  exact Ha1.
-  apply in_cons.
-  exact Ha2.
-  exact H3.
-Qed.
-
-Lemma NoDup_app:
-  forall A:Type, forall L1 L2 : list A,
-    NoDup L1 
-    -> NoDup L2
-    -> ~(exists x:A, In x L1 /\ In x L2) -> NoDup (L1 ++ L2).
-  intro A.
-  induction L1.
-  intros L2 HL1 HL2 Hi.
-  simpl; exact HL2.
-  intros L2 HL1 HL2 Hi.
-  rewrite<- app_comm_cons.
-  apply NoDup_cons.
-  intro H.
-  apply in_app_iff in H.
-  decompose [or] H.
-  inversion HL1.
-  elim H3.
-  exact H0.
-  elim Hi.
-  exists a.
-  apply conj.
-  apply in_eq.
-  exact H0.
-  apply IHL1.
-  inversion HL1.
-  exact H2.
-  exact HL2.
-  intro Hi2.
-  elim Hi.
-  elim Hi2.
-  intros x Hx.
-  exists x.
-  decompose [and] Hx.
-  apply conj.
-  apply in_cons.
-  exact H.
-  exact H0.
-Qed.
-
-Lemma NoDup_filter:
-  forall A : Type, forall f : A -> bool, forall L : list A,
-    NoDup L -> NoDup (filter f L).
-  intros A f L.
-  induction 1.
-  simpl.
-  apply NoDup_nil.
-  simpl.
-  destruct (f x).
-  apply NoDup_cons.
-  intro Hx.
-  apply filter_In in Hx.
-  decompose [and] Hx.
-  elim H.
-  exact H1.
-  exact IHNoDup.
-  exact IHNoDup.
-Qed.
-
-Lemma NoDup_filter_app: 
-  forall A : Type,  forall f : A -> bool, forall L1 L2 : list A,
-    NoDup L1 
-    -> NoDup L2 
-    -> (filter f L2 = nil) 
-    -> NoDup ((filter f L1) ++ L2).
-  intros A f L1 L2 HL1 HL2 Hf.
-  apply NoDup_app.
-  apply NoDup_filter.
-  exact HL1.
-  exact HL2.
-  intro H.
-  elim H.
-  intros x Hand.
-  decompose [and] Hand.
-  apply filter_In in H0.
-  decompose [and] H0.
-  assert (Hb: In x (filter f L2)).
-  apply filter_In.
-  apply conj.
-  exact H1.
-  exact H3.
-  rewrite Hf in Hb.
-  apply (in_nil Hb).
-Qed.
-
-Lemma filter_app:
-  forall A:Type, forall f : A -> bool, forall L1 L2: list A,
-    (filter f (L1 ++ L2)) = (filter f L1) ++ (filter f L2).
-  intros A f L1.
-  induction L1.
-  simpl.
-  trivial.
-  simpl.
-  intro L2.
-  rewrite IHL1.
-  destruct (f a).
-  reflexivity.
-  reflexivity.
-Qed.
-
-Lemma filter_filter: 
-  forall A:Type, forall f1 f2: A -> bool, forall L: list A, 
-    (filter f1 (filter f2 L)) = (filter (fun x => (f1 x) && (f2 x)) L).
-  intros A f1 f2 L.
-  induction L.
-  simpl.
-  reflexivity.
-  simpl.
-  destruct (f2 a).
-  simpl.
-  replace (f1 a && true) with (f1 a).
-  rewrite IHL.
-  reflexivity.
-  rewrite andb_true_r.
-  reflexivity.
-  rewrite andb_false_r.
-  rewrite IHL.
-  reflexivity.
-Qed.
-
-Lemma filter_filter_empty:
-  forall A:Type, forall f1 f2: A -> bool,
-    (forall x:A, ((f1 x)=true -> (f2 x)=false) /\ ((f2 x)=true -> (f1 x)=false)) -> 
-    forall L:list A, 
-      (filter f1 (filter f2 L)) = [].
-  intros A f1 f2 H L.
-  rewrite filter_filter.
-  induction L.
-  simpl; reflexivity.
-  simpl.
-  remember (f2 a) as b.
-  destruct b.
-  generalize (H a).
-  intro Hne.
-  rewrite<- Heqb in Hne.
-  decompose [and] Hne.
-  rewrite H1.
-  simpl.
-  exact IHL.
-  reflexivity.
-  generalize (H a).
-  intro Hne.
-  rewrite<- Heqb in Hne.
-  rewrite andb_false_r.
-  exact IHL.
-Qed.
-
-Lemma app_eq_nil_rev: 
-  forall A:Type, forall L1 L2 : list A,
-    L1 = [] -> L2 = [] -> (L1 ++ L2 = []).
-  intros A L1 L2 H1 H2.
-  rewrite H1.
-  rewrite H2.
-  simpl.
-  reflexivity.
-Qed.
-
 Lemma procEvalInv_NoDup: 
   forall p : proc, forall L : list coins,
     (forall x:coins, In x L -> (procDepth p <= (length x)))
     -> NoDup L 
     -> NoDup (procEvalInv p L).
+Proof.
   induction p.
   simpl.
   tauto.
@@ -2601,6 +1997,7 @@ Definition procWorks (p:proc) :=
 Lemma length_cons: 
   forall A:Type, forall L:list A, forall n:nat,
     (length L) = (S n) -> exists a:A, exists L1: list A, L = (a::L1).
+Proof.
   intros A L.
   induction L.
   simpl.
@@ -2617,6 +2014,7 @@ Qed.
 Lemma list_split_length:
   forall A:Type, forall L1 L2 : list A, forall a:A,
     length (L1 ++ a::L2) = S (length (L1 ++ L2)).
+Proof.
   intros A L1 L2 a.
   rewrite app_length.
   rewrite app_length.
@@ -2628,6 +2026,7 @@ Qed.
 Lemma In_split:
   forall A:Type, forall L1 L2:list A, forall b: A,
     In b (L1 ++ L2) -> (forall a:A, In b (L1 ++ (a::L2))).
+Proof.
   intros A L1 L2 b H a.
   apply in_or_app.
   apply in_app_or in H.
@@ -2641,6 +2040,7 @@ Qed.
 Lemma In_remove: 
   forall A:Type, forall L1 L2 : list A, forall a b : A,
     a<>b -> In b (L1 ++ a::L2) -> In b (L1 ++ L2).
+Proof.
   intros A L1 L2 a b Hne Hin.
   apply in_app_or in Hin.
   decompose [or] Hin.
@@ -2656,6 +2056,7 @@ Qed.
 Lemma NoDup_cons_inv:
   forall A:Type, forall L:list A, forall a:A,
     NoDup (a::L) -> NoDup L.
+Proof.
   intros A L a H.
   inversion H.
   exact H3.
@@ -2664,6 +2065,7 @@ Qed.
 Lemma NoDup_remove_cons:
   forall A:Type, forall L: list A, forall a : A,
     NoDup (a::L) -> ~ (In a L).
+Proof.
   intros A L a H.
   replace (a::L) with ([] ++ (a::L)) in H.
   apply NoDup_remove_2 in H.
@@ -2676,6 +2078,7 @@ Lemma list_cardinality:
   forall A:Type, forall L1 L2 : list A,
     ((forall a:A, In a L1 <-> In a L2) /\ NoDup L1 /\ NoDup L2) 
     -> (length L1 = length L2).
+Proof.
   intro A.
   induction L1.
   intros L2 Hand.
@@ -2754,6 +2157,7 @@ Lemma cardinality_witness_unique:
   forall A:Type, forall P: A -> Prop, forall L1 L2:list A,
     ((cardinality_witness A P L1) /\ (cardinality_witness A P L2)) 
     -> (length L1 = length L2).
+Proof.
   intros A P L1 L2 H.
   unfold cardinality_witness in H.
   decompose [and] H.
@@ -2777,6 +2181,7 @@ Qed.
 Lemma cardinality_unique :
 forall A:Type, forall P: A -> Prop, forall n m:nat,
   (cardinality A P n) /\ (cardinality A P m) -> n = m.
+Proof.
   intros A P n m H.
   decompose [and] H.
   unfold cardinality in H0,H1.
@@ -2798,6 +2203,7 @@ Qed.
 Lemma cardinality_coins: 
   forall n:nat,
     cardinality coins (fun L:coins => length L = n) (2^n).
+Proof.
   intro n.
   induction n.
   unfold cardinality.
@@ -2958,11 +2364,15 @@ Fixpoint colon_helper n1 n2 :=
 (* Colon is used to construct [1; ...; n] *)
 Definition colon n := colon_helper 1 n.
 
-Example colon_n: colon 5 = [1;2;3;4;5]. 
-simpl; reflexivity.
+Example colon_n:
+  colon 5 = [1;2;3;4;5]. 
+Proof.
+  simpl; reflexivity.
 Qed.
 
-Lemma colon_helper_length: forall n2 n1:nat, length (colon_helper n1 n2) = n2.
+Lemma colon_helper_length:
+  forall n2 n1:nat, length (colon_helper n1 n2) = n2.
+Proof.
   induction n2.
   intro n1.
   simpl; reflexivity.
@@ -2972,7 +2382,9 @@ Lemma colon_helper_length: forall n2 n1:nat, length (colon_helper n1 n2) = n2.
   apply IHn2.
 Qed.
 
-Lemma colon_length: forall n:nat, length (colon n) = n.
+Lemma colon_length:
+  forall n:nat, length (colon n) = n.
+Proof.
   intro n.
   unfold colon.
   apply colon_helper_length.
@@ -2981,6 +2393,7 @@ Qed.
 Lemma colon_helper_in:
   forall n2 n1:nat, forall m:nat,
     In m (colon_helper n1 n2) <-> m>=n1 /\ m < (n1+n2).
+Proof.
   induction n2.
   intros n1 m.
   simpl.
@@ -3031,6 +2444,7 @@ Qed.
 Lemma colon_in:
   forall n:nat, forall m:nat,
     In m (colon n) <-> m >= 1 /\ m <= n.
+Proof.
   intros n m.
   unfold colon.
   apply conj.
@@ -3051,7 +2465,8 @@ Lemma colon_in:
 Qed.
 
 Lemma colon_helper_nodup:
-  forall m n:nat, NoDup (colon_helper n m).  
+  forall m n:nat, NoDup (colon_helper n m).
+Proof.
   induction m.
   simpl.
   intro.
@@ -3067,6 +2482,7 @@ Qed.
 
 Lemma colon_nodup:
   forall n:nat, NoDup (colon n).
+Proof.
   intro n.
   unfold colon.
   apply colon_helper_nodup.
@@ -3081,8 +2497,10 @@ Fixpoint expand (A:Type) (a:A) (n:nat) :=
     | (S n') => a :: (expand A a n')
   end.
 
-Lemma expand_length: forall A:Type, forall a:A, forall n:nat,
-                       (length (expand A a n)) = n.
+Lemma expand_length:
+  forall A:Type, forall a:A, forall n:nat,
+    (length (expand A a n)) = n.
+Proof.
   intros A a n.
   induction n.
   simpl; reflexivity.
@@ -3096,6 +2514,7 @@ Qed.
 Lemma expand_app:
   forall A:Type, forall c:A, forall n:nat,
     expand A c (S n) = expand A c n ++ [c].
+Proof.
   intros A c n.
   induction n.
   simpl; reflexivity.
@@ -3108,7 +2527,9 @@ Lemma expand_app:
   f_equal.
 Qed.
 
-Lemma expand_nil: forall A:Type, forall a:A, expand A a 0 = [].
+Lemma expand_nil:
+  forall A:Type, forall a:A, expand A a 0 = [].
+Proof.
   intros A a.
   unfold expand.
   reflexivity.
@@ -3117,6 +2538,7 @@ Qed.
 Lemma expand_Sn: 
   forall A:Type, forall a:A, forall n:nat, 
     expand A a (S n) = a :: (expand A a n).
+Proof.
   intros A a n.
   unfold expand at 1.
   fold expand.
@@ -3126,6 +2548,7 @@ Qed.
 Lemma expand_plus:
   forall A:Type, forall a:A, forall n m:nat,
     (expand A a (n + m)) = (expand A a n) ++ (expand A a m).
+Proof.
   intros A a n m.
   induction n.
   rewrite expand_nil.
@@ -3139,8 +2562,10 @@ Lemma expand_plus:
   ring.
 Qed.
 
-Lemma expand_In: forall A:Type, forall a:A, forall n:nat,
-                   forall b:A, In b (expand A a n) -> b = a.
+Lemma expand_In:
+  forall A:Type, forall a:A, forall n:nat,
+  forall b:A, In b (expand A a n) -> b = a.
+Proof.
   intros A a n.
   induction n.
   intro b.
@@ -3156,8 +2581,10 @@ Lemma expand_In: forall A:Type, forall a:A, forall n:nat,
   exact H0.
 Qed.
 
-Lemma expand_In_inv: forall A:Type, forall a:A, forall n:nat,
-                       n>0 -> In a (expand A a n).
+Lemma expand_In_inv:
+  forall A:Type, forall a:A, forall n:nat,
+    n>0 -> In a (expand A a n).
+Proof.
   intros A a n.
   induction n.
   intros H.
@@ -3172,6 +2599,7 @@ Qed.
 Lemma exactly0_expand:
   forall n:nat,
     exactlyn 0 (expand _ gold n).
+Proof.
   intros n.
   induction n.
   simpl.
@@ -3184,6 +2612,7 @@ Qed.
 Lemma expand_exactly0:
   forall L:coins,
     exactlyn 0 L -> L = expand _ gold (length L).
+Proof.
   intro L.
   induction L.
   inversion 1.
@@ -3200,6 +2629,7 @@ Lemma exactly1_expand:
     exactlyn 1 L 
     -> (exists n1 n2:nat, 
           L = (expand _ gold n1) ++ [fake] ++(expand _ gold n2)).
+Proof.
   intro L.
   induction L.
   intro H.
@@ -3227,6 +2657,7 @@ Qed.
 Lemma expand_exactly1:
   forall n1 n2:nat,
     exactlyn 1 ((expand _ gold n1) ++ [fake] ++ (expand _ gold n2)).
+Proof.
   induction n1. 
   simpl.
   intro n2.
@@ -3246,54 +2677,57 @@ Definition exactly1_pos (len:nat) (n:nat) :=
 Lemma exactly1_pos_length:
   forall len n : nat,
     len > n -> length (exactly1_pos len n) = len.
-smash.
-unfold exactly1_pos.
-rewrite app_length.
-rewrite app_length.
-simpl.
-rewrite expand_length.
-rewrite expand_length.
-rewrite Nat.sub_1_r.
-rewrite Nat.succ_pred_pos.
-rewrite le_plus_minus_r.
-reflexivity.
-decompose [and] x.
-apply lt_le_weak.
-exact x.
-rewrite (minus_diag_reverse n).
-apply (plus_lt_reg_l (n-n) (len - n) n).
-rewrite le_plus_minus_r.
-rewrite le_plus_minus_r.
-exact x.
-apply lt_le_weak.
-exact x.
-reflexivity.
+Proof.
+  smash.
+  unfold exactly1_pos.
+  rewrite app_length.
+  rewrite app_length.
+  simpl.
+  rewrite expand_length.
+  rewrite expand_length.
+  rewrite Nat.sub_1_r.
+  rewrite Nat.succ_pred_pos.
+  rewrite le_plus_minus_r.
+  reflexivity.
+  decompose [and] x.
+  apply lt_le_weak.
+  exact x.
+  rewrite (minus_diag_reverse n).
+  apply (plus_lt_reg_l (n-n) (len - n) n).
+  rewrite le_plus_minus_r.
+  rewrite le_plus_minus_r.
+  exact x.
+  apply lt_le_weak.
+  exact x.
+  reflexivity.
 Qed.
 
 Lemma exactly1_pos_length_degenerate:
   forall len n : nat,
     n >= len -> length (exactly1_pos len n) = (n+1).
-intros len n H.
-unfold exactly1_pos.
-replace (len-n-1) with 0.
-simpl.
-rewrite app_length.
-simpl.
-f_equal.
-apply expand_length.
-omega.
+Proof.
+  intros len n H.
+  unfold exactly1_pos.
+  replace (len-n-1) with 0.
+  simpl.
+  rewrite app_length.
+  simpl.
+  f_equal.
+  apply expand_length.
+  omega.
 Qed.
 
 Lemma exactly1_pos_exactly1:
   forall len n:nat,
     n < len -> exactlyn 1 (exactly1_pos len n).
-intros len n Hlen.
-unfold exactly1_pos.
-apply (exactlyn_app (expand coin gold n) 0).
-apply exactly0_expand.
-apply (exactlyn_app [fake] 1).
-smash.
-apply exactly0_expand.
+Proof.
+  intros len n Hlen.
+  unfold exactly1_pos.
+  apply (exactlyn_app (expand coin gold n) 0).
+  apply exactly0_expand.
+  apply (exactlyn_app [fake] 1).
+  smash.
+  apply exactly0_expand.
 Qed.
 
 Definition exactly1_gen (len:nat) :=
@@ -3302,16 +2736,18 @@ Definition exactly1_gen (len:nat) :=
 Lemma exactly1_gen_length:
   forall len:nat,
     length (exactly1_gen len) = len.
-smash.
-unfold exactly1_gen.
-rewrite map_length.
-rewrite colon_length.
-reflexivity.
+Proof.
+  smash.
+  unfold exactly1_gen.
+  rewrite map_length.
+  rewrite colon_length.
+  reflexivity.
 Qed.
 
 Lemma exactly1_gen_sub_lengths:
   forall len:nat, forall L:coins,
     In L (exactly1_gen len) -> (length L = len).
+Proof.
   intros len L H.
   unfold exactly1_gen in H.
   apply in_map_iff in H.
@@ -3334,6 +2770,7 @@ Qed.
 Lemma exactly1_gen_exact:
   forall len:nat, forall L:coins,
     In L (exactly1_gen len) -> (exactlyn 1 L).
+Proof.
   intros len L H.
   unfold exactly1_gen in H.
   apply in_map_iff in H.
@@ -3347,6 +2784,7 @@ Qed.
 Lemma exactly1_pos_last:
   forall n:nat,
     exactly1_pos (S n) n = (expand _ gold n) ++ [fake].
+Proof.
   intros n.
   unfold exactly1_pos.
   replace (S n - n - 1) with 0.
@@ -3358,6 +2796,7 @@ Qed.
 Lemma exactly1_pos_S: 
   forall len n:nat,
     (n < len) -> (exactly1_pos (S len) n) = ((exactly1_pos len n) ++ [gold]).
+Proof.
   intros len n Hlen.
   unfold exactly1_pos.
   simpl.
@@ -3382,6 +2821,7 @@ Qed.
 Lemma exactly1_pos_eq:
   forall len n m :nat,
     (n < len) -> exactly1_pos len n = exactly1_pos len m -> n=m.
+Proof.
   induction len.
   intros n m Hlen Hpos.
   absurd (n<0).
@@ -3433,6 +2873,7 @@ Qed.
 
 Lemma exactly1_gen_NoDup:
   forall n:nat, NoDup (exactly1_gen n).
+Proof.
   intro n.
   induction n.
   unfold exactly1_gen.
@@ -3455,6 +2896,7 @@ Qed.
 Lemma exactly1_gen_combo:
   forall n:nat, forall a:coins,
     In a (exactly1_gen (S n)) -> In (gold::a) (exactly1_gen (S (S n))).
+Proof.
   intros n a.
   unfold exactly1_gen.
   intro H.
@@ -3487,7 +2929,11 @@ Qed.
 
 Lemma cardinality_witness_exactly1 :
   forall n:nat,
-    cardinality_witness coins (fun L => (length L = (S n) /\ exactlyn 1 L)) (exactly1_gen (S n)).
+    (cardinality_witness
+       coins
+       (fun L => (length L = (S n) /\ exactlyn 1 L))
+       (exactly1_gen (S n))).
+Proof.
   induction n.
   
 (* Case n = 0 *)
@@ -3529,7 +2975,8 @@ Lemma cardinality_witness_exactly1 :
   apply NoDup_cons.
   auto.
   apply NoDup_nil.
-(* Inductive case. *)
+
+  (* Inductive case. *)
   unfold cardinality_witness.
   apply conj.
   intro a.
@@ -3579,9 +3026,10 @@ Lemma cardinality_witness_exactly1 :
   apply exactly1_gen_NoDup.
 Qed.
 
-Lemma cardinality_exactly1 :
+Lemma cardinality_exactly1:
   forall n:nat, 
     cardinality coins (fun L => (length L = n /\ exactlyn 1 L)) n.
+Proof.
   intro n.
   unfold cardinality.
   destruct n.
@@ -3610,14 +3058,15 @@ Lemma cardinality_exactly1 :
 Qed.
 
 Definition sorted_coins n := 
-match n with 
-  | 0 => []
-  | (S m) => fake :: (expand coin gold m)
-end.
+  match n with 
+    | 0 => []
+    | (S m) => fake :: (expand coin gold m)
+  end.
 
 Lemma in_nil: 
   forall A:Type, forall a b:A, 
     In a (b::nil) <-> b = a.
+Proof.
   intros A a b.
   apply conj.
   intro H.
@@ -3633,6 +3082,7 @@ Qed.
 Lemma sorted_coins_length:
   forall n:nat,
     length (sorted_coins n) = n.
+Proof.
   intro n.
   induction n.
   simpl.
@@ -3657,6 +3107,7 @@ Lemma exactlyn_sifted:
   forall n:nat, forall L:coins,
     exactlyn n L -> 
     exactlyn 0 (fst (sift L)) /\ exactlyn n (snd (sift L)) /\ Permutation ((fst (sift L))++(snd (sift L))) L.
+Proof.
   intros n L.
   induction 1.
   simpl.
@@ -3690,7 +3141,7 @@ Qed.
 Lemma exactlyn_0_eq:
   forall L1 L2:coins,
     (length L1 = length L2) -> exactlyn 0 L1 -> exactlyn 0 L2 -> L1 = L2.
-  
+Proof.
   induction L1.
   simpl.
   intros L2 Hlen Hex1 Hex2.
@@ -3717,6 +3168,7 @@ Lemma exactlyn_n_eq:
     exactlyn (length L1) L1 ->
     exactlyn (length L2) L2 ->
     L1 = L2.
+Proof.
   induction L1.
   intros L2 Hlen.
   simpl in Hlen.
@@ -3755,6 +3207,7 @@ Qed.
 Lemma exactlyn_sifted_fst_length:
   forall n:nat, forall L:coins,
     exactlyn n L -> (length (fst (sift L))) = (length L) - n.
+Proof.
   intros n L Hex.
   induction Hex.
   simpl.
@@ -3770,6 +3223,7 @@ Qed.
 Lemma exactlyn_sifted_snd_length:
   forall n:nat, forall L:coins,
     exactlyn n L -> (length (snd (sift L))) = n.
+Proof.
   induction n.
   intros L Hex.
   simpl.
@@ -3795,6 +3249,7 @@ Lemma exactlyn_inv_permutes:
       exactlyn n L1 -> 
       exactlyn n L2 -> 
       Permutation L1 L2.
+Proof.
   intros L1 L2 Hlen n Hex1 Hex2.
   assert (Hsift1 := exactlyn_sifted _ _ Hex1).
   decompose [and] Hsift1.
@@ -3830,6 +3285,7 @@ Qed.
 Lemma exactly1_gen_permutes:
   forall n:nat, forall L1: coins,
     In L1 (exactly1_gen n) -> (forall L2:coins, Permutation L1 L2 <-> In L2 (exactly1_gen n)).
+Proof.
   intro n.
   induction n.
   simpl.
@@ -3870,6 +3326,7 @@ Lemma exacltyn_1_sorts:
   forall L:coins,
     exactlyn 1 L ->
     Permutation L (sorted_coins (length L)).
+Proof.
   intros L Hex.
   assert (Hlen : length L > 0).
   apply exactlyn_len.
@@ -3897,7 +3354,7 @@ Lemma procEval_sorts:
       (length L = procDepth p) ->
       exactlyn 1 L -> 
       (procEval p L) = (sorted_coins (length L)). 
-  
+Proof. 
   intros p Hworks L Hlen Hex.
   assert (Hperm := (procEval_permutes p L)).
   unfold procWorks in Hworks.
@@ -3932,6 +3389,7 @@ Lemma proc_works_inv:
     (procDepth p) > 0 ->
     (procWorks p) -> 
     (Permutation (procEvalInv p [sorted_coins (procDepth p)]) (exactly1_gen (procDepth p))).
+Proof.
   intros p Hdepth Hworks.
   assert (Hcardw := (cardinality_witness_exactly1 (pred (procDepth p)))).
   assert (Hsize : S (pred (procDepth p)) = (procDepth p)).
@@ -3994,9 +3452,11 @@ Lemma proc_works_inv:
   apply (procEval_sorts p Hworks x H0 H1).
 Qed.
 
-(* This is our eventual goal. *)
+(* This establishes a bound on the minimum cost for a resolving a set
+of coins o given length. *)
 Lemma proc_bound: 
   forall p:proc, (procWorks p) -> (procDepth p) <= 3^(procCost p).
+Proof.
   intros p Hworks.
   remember (procDepth p) as n.
   destruct n.
@@ -4028,6 +3488,7 @@ Function pn (n:nat) {measure (fun x => 6 * n ) n } :=
        let m := k mod 3 in 
        (Weigh d (pn d) (Swap (d+d) (d + m) (pn (d + m))) (Swap d d (pn d))))
   end.
+Proof.
 assert (Hduh: 3<>0).
 lia.
 intros n n0 n1 n2 H1 H2 Hn.
@@ -4061,19 +3522,24 @@ Defined.
 Eval cbv in (pn 4).
 Eval cbv in (pn 12).
 
-Lemma pn4_is_p4: (pn 4) = p4.
-cbv.
-reflexivity.
+Lemma pn4_is_p4:
+  (pn 4) = p4.
+Proof.
+  cbv.
+  reflexivity.
 Qed.
 
-Lemma pn12_is_p12: (pn 12) = p12.
-cbv.
-reflexivity.
+Lemma pn12_is_p12:
+  (pn 12) = p12.
+Proof.
+  cbv.
+  reflexivity.
 Qed.
 
 Lemma max_eq_r:
   forall n m p:nat,
     n<=p -> m=p -> (Peano.max n m = p).
+Proof.
   intros n m p Hnm Hmp.
   rewrite Hmp.
   apply Max.max_r.
@@ -4083,6 +3549,7 @@ Qed.
 Lemma max_eq_l:
   forall n m p:nat,
     m <= p -> n = p -> (Peano.max n m = p).
+Proof.
   intros n m p Hnm Hnp.
   rewrite<- Hnp.
   lia.
@@ -4091,6 +3558,7 @@ Qed.
 Lemma max_plus:
   forall n m: nat,
     Peano.max (n+m) n = (n+m).
+Proof.
   intros n m.
   rewrite (plus_n_O n) at 2.
   rewrite Max.plus_max_distr_l.
@@ -4100,97 +3568,98 @@ Qed.
 
 Lemma pn_procDepth:
   forall n:nat, (procDepth (pn n) = n) \/ (n = 1).
-intros n.
-functional induction (pn n).
-left.
-simpl.
-reflexivity.
-right.
-reflexivity.
-left.
-simpl.
-reflexivity.
-left.
-remember (n/3) as n3.
-unfold procDepth.
-fold procDepth.
-destruct n.
-simpl in Heqn3.
-rewrite Heqn3.
-simpl.
-reflexivity.
-destruct n.
-lia.
-destruct n.
-simpl in Heqn3.
-rewrite Heqn3.
-simpl.
-reflexivity.
-apply max_eq_r.
-apply (le_trans _ (3 * n3) _).
-lia.
-rewrite-> (div_mod (S (S (S n))) 3).
-rewrite<- Heqn3.
-lia.
-lia.
-apply max_eq_l.
-decompose [or] IHp1.
-rewrite H.
-rewrite max_plus.
-rewrite (div_mod (S (S (S n))) 3).
-rewrite<- Heqn3.
-lia.
-lia.
-rewrite H.
-simpl.
-lia.
-apply max_eq_r.
-decompose [or] IHp1.
-rewrite H.
-rewrite Heqn3.
-apply Nat.div_le_upper_bound.
-lia.
-lia.
-rewrite H.
-simpl.
-lia.
-apply max_eq_l.
-decompose [or] IHp0.
-rewrite H.
-rewrite Heqn3.
-rewrite (div_mod (S (S (S n))) 3) at 3.
-lia.
-lia.
-rewrite H.
-simpl.
-lia.
-rewrite (div_mod (S (S (S n))) 3) at 2.
-rewrite<- (mult_1_r n3) at 1.
-rewrite mult_n_Sm.
-rewrite plus_assoc.
-rewrite mult_n_Sm.
-rewrite<- Heqn3.
-rewrite mult_comm at 1.
-lia.
-lia.
+Proof.
+  intros n.
+  functional induction (pn n).
+  left.
+  simpl.
+  reflexivity.
+  right.
+  reflexivity.
+  left.
+  simpl.
+  reflexivity.
+  left.
+  remember (n/3) as n3.
+  unfold procDepth.
+  fold procDepth.
+  destruct n.
+  simpl in Heqn3.
+  rewrite Heqn3.
+  simpl.
+  reflexivity.
+  destruct n.
+  lia.
+  destruct n.
+  simpl in Heqn3.
+  rewrite Heqn3.
+  simpl.
+  reflexivity.
+  apply max_eq_r.
+  apply (le_trans _ (3 * n3) _).
+  lia.
+  rewrite-> (div_mod (S (S (S n))) 3).
+  rewrite<- Heqn3.
+  lia.
+  lia.
+  apply max_eq_l.
+  decompose [or] IHp1.
+  rewrite H.
+  rewrite max_plus.
+  rewrite (div_mod (S (S (S n))) 3).
+  rewrite<- Heqn3.
+  lia.
+  lia.
+  rewrite H.
+  simpl.
+  lia.
+  apply max_eq_r.
+  decompose [or] IHp1.
+  rewrite H.
+  rewrite Heqn3.
+  apply Nat.div_le_upper_bound.
+  lia.
+  lia.
+  rewrite H.
+  simpl.
+  lia.
+  apply max_eq_l.
+  decompose [or] IHp0.
+  rewrite H.
+  rewrite Heqn3.
+  rewrite (div_mod (S (S (S n))) 3) at 3.
+  lia.
+  lia.
+  rewrite H.
+  simpl.
+  lia.
+  rewrite (div_mod (S (S (S n))) 3) at 2.
+  rewrite<- (mult_1_r n3) at 1.
+  rewrite mult_n_Sm.
+  rewrite plus_assoc.
+  rewrite mult_n_Sm.
+  rewrite<- Heqn3.
+  rewrite mult_comm at 1.
+  lia.
+  lia.
 Qed.
 
 Lemma pn_procDepthBound:
   forall n:nat, procDepth (pn n) <= n.
 Proof.
-intro n.
-case n.
-simpl.
-trivial.
-intro n0.
-case n0.
-simpl.
-lia.
-intro n1.
-assert (H:= (pn_procDepth (S (S n1)))).
-decompose [or] H.
-lia.
-lia.
+  intro n.
+  case n.
+  simpl.
+  trivial.
+  intro n0.
+  case n0.
+  simpl.
+  lia.
+  intro n1.
+  assert (H:= (pn_procDepth (S (S n1)))).
+  decompose [or] H.
+  lia.
+  lia.
 Qed.
 
 Lemma list_split: 
@@ -4216,241 +3685,240 @@ Proof.
   reflexivity.
 Qed.
 
-
 Lemma pnWorks_helper:
   forall L1 L2 L3 : coins, 
     procWorks (pn (length L1)) -> 
     exactlyn 1 L1 -> 
     hd gold (procEval (pn (length L1)) (L1 ++ L2 ++ L3)) = fake.
 Proof.
-intros L1 L2 L3 H Hex.
-rewrite (procDepth_tl _ _ _ (pn_procDepthBound _)).
-rewrite (hd_app _ _ (L2 ++ L3) gold).
-remember (length L1) as n.
-case n in *.
-symmetry in Heqn.
-apply list_length0 in Heqn.
-rewrite Heqn in *.
-inversion Hex.
-case n in *.
-case L1 in *.
-simpl in Heqn.
-lia.
-simpl in Heqn.
-apply eq_add_S in Heqn.
-symmetry in Heqn.
-apply list_length0 in Heqn.
-rewrite Heqn in *.
-inversion Hex.
-simpl.
-reflexivity.
-inversion H2.
-unfold procWorks in H.
-apply H.
-rewrite<- Heqn.
-assert (Hdepth:= (pn_procDepth (S (S n)))).
-decompose [or] Hdepth.
-auto.
-lia.
-exact Hex.
-rewrite<- procEval_length.
-case L1 in *.
-inversion Hex.
-simpl.
-lia.
+  intros L1 L2 L3 H Hex.
+  rewrite (procDepth_tl _ _ _ (pn_procDepthBound _)).
+  rewrite (hd_app _ _ (L2 ++ L3) gold).
+  remember (length L1) as n.
+  case n in *.
+  symmetry in Heqn.
+  apply list_length0 in Heqn.
+  rewrite Heqn in *.
+  inversion Hex.
+  case n in *.
+  case L1 in *.
+  simpl in Heqn.
+  lia.
+  simpl in Heqn.
+  apply eq_add_S in Heqn.
+  symmetry in Heqn.
+  apply list_length0 in Heqn.
+  rewrite Heqn in *.
+  inversion Hex.
+  simpl.
+  reflexivity.
+  inversion H2.
+  unfold procWorks in H.
+  apply H.
+  rewrite<- Heqn.
+  assert (Hdepth:= (pn_procDepth (S (S n)))).
+  decompose [or] Hdepth.
+  auto.
+  lia.
+  exact Hex.
+  rewrite<- procEval_length.
+  case L1 in *.
+  inversion Hex.
+  simpl.
+  lia.
 Qed.
 
 Lemma pnWorks:
   forall n:nat, procWorks (pn n).
-intro n.
-assert (Hdepth:= pn_procDepth n).
-functional induction (pn n).
-unfold procWorks.
-simpl.
-intros L Hlen Hex.
-apply list_length0 in Hlen.
-rewrite Hlen.
-simpl.
-rewrite Hlen in Hex.
-inversion Hex.
-unfold procWorks.
-simpl.
-intros L Hlen Hex.
-apply list_length0 in Hlen.
-rewrite Hlen in Hex.
-inversion Hex.
-unfold procWorks.
-simpl.
-intros L Hlen Hex.
-inversion Hex.
-inversion H0.
-simpl.
-reflexivity.
-simpl.
-reflexivity.
-inversion H.
-unfold procEval.
-assert ((weigh 1 (gold :: fake :: ns0)) = Gt).
-cbv.
-destruct ns0.
-reflexivity.
-reflexivity.
-rewrite H5.
-simpl.
-reflexivity.
-rewrite<- H4 in H1.
-rewrite<- H1 in Hlen.
-simpl in Hlen.
-apply Nat.succ_inj in Hlen.
-apply Nat.succ_inj in Hlen.
-apply list_length0 in Hlen.
-rewrite Hlen in H2.
-inversion H2.
-
-
-remember (n / 3) as n3.
-unfold procWorks.
-intros L Hlen Hex.
-
-assert (IHpWorks : procWorks (pn n3)).
-apply IHp.
-apply pn_procDepth.
-
-assert (IHp0Works : procWorks (pn (n3 + n mod 3))).
-apply IHp0.
-apply pn_procDepth.
-clear IHp.
-clear IHp0.
-clear IHp1.
-
-assert (Hlen': length L = n).
-elim Hdepth.
-intro HprocDepth.
-rewrite HprocDepth in Hlen.
-exact Hlen.
-intro Hn1.
-rewrite Hn1 in Heqn3.
-simpl in Heqn3.
-rewrite Heqn3 in Hlen.
-rewrite Hn1 in Hlen.
-simpl in Hlen.
-rewrite Hn1 .
-exact Hlen.
-clear Hlen.
-
-assert (Hn3bound: n3 <> 0).
-rewrite Heqn3.
-case n in *.
-contradiction.
-case n in *.
-contradiction.
-case n in *.
-contradiction.
-replace (S (S (S n))) with (1 * 3 + n).
-rewrite Nat.div_add_l.
-lia.
-lia.
-lia.
-remember (n mod 3) as nm3.
-unfold procEval.
-simpl.
-fold procEval.
-
-
-remember (weigh n3 L) as wgt.
-assert (H3len : n = n3 + (n3 + (n3 + nm3))).
-rewrite Heqn3.
-rewrite Heqnm3.
-rewrite (div_mod n 3) at 1.
-lia.
-lia.
-rewrite<- Hlen' in H3len.
-assert (Hsplit1:= (list_split _ L _ _ H3len)).
-destruct Hsplit1 as [L1].
-destruct H as [L1b].
-decompose [and] H.
-clear H.
-assert (Hsplit2:=(list_split _ L1b _ _ H2)).
-destruct Hsplit2 as [L2].
-destruct H as [L3].
-clear H2.
-decompose [and] H; clear H.
-rewrite H5 in H3; clear H5.
-rewrite H3.
-assert (Hex2:= (exactlyn_app_rev 1 L Hex L1 (L2 ++ L3) H3)).
-destruct Hex2 as [nL1].
-destruct H as [nL1b].
-decompose [and] H.
-clear H.
-assert (Hduh: L2 ++ L3 = L2 ++ L3).
-reflexivity.
-assert (Hex3:= (exactlyn_app_rev nL1b (L2++L3) H6 L2 L3) Hduh).
-clear Hduh.
-destruct Hex3 as [nL2].
-destruct H as [nL3].
-decompose [and] H.
-clear H.
-rewrite H10 in H7.
-clear H6 H10 nL1b L1b.
-
-assert (Hw: (nat_compare nL2 nL1) = (weigh n3 L)).
-rewrite H3.
-rewrite app_assoc.
-assert (HL12: (n3 + n3) <= length (L1 ++ L2)).
-rewrite app_length.
-rewrite H0; rewrite H1.
-auto.
-rewrite<- (weigh_tl _ _ _ HL12).
-rewrite (weigh_defn _ L1 L2 H0 H1 nL1 nL2 H2 H5).
-reflexivity.
-
-(* Now that we have setup the proof, do case analysis on the sections of the list. *)
-destruct wgt.
-
-(* EQ case *)
-assert (HnL3 : nL3 = 1).
-rewrite<- Heqwgt in Hw.
-apply nat_compare_eq in Hw.
-rewrite Hw in *.
-lia.
-(* Now we know there is eactly one fake coin in L3.*)
-rewrite HnL3 in *.
-
-simpl.
-rewrite app_assoc at 1.
-assert (H: length (L1 ++ L2) = n3 + n3).
-rewrite app_length; rewrite H0; rewrite H1.
-auto.
-rewrite<- H4 in *.
-rewrite<- H.
-rewrite swap_app.
-apply (pnWorks_helper L3 L1 L2 IHp0Works H9).
-
-(* case Lt *)
-rewrite<- Heqwgt in Hw.
-assert (HL1: nL1 = 1).
-apply nat_compare_lt in Hw.
-lia.
-rewrite HL1 in *.
-rewrite<- H0 in *.
-apply (pnWorks_helper L1 L2 L3 IHpWorks H2).
-
-(* case Gt *)
-rewrite<- Heqwgt in Hw.
-assert (HL2: nL2 = 1).
-apply nat_compare_gt in Hw.
-lia.
-rewrite HL2 in *.
-rewrite app_assoc.
-rewrite swap_tl.
-rewrite<- H0 at 2.
-rewrite<- H1 at 2.
-rewrite swap_app.
-rewrite<- app_assoc.
-rewrite<- H1 in *.
-apply (pnWorks_helper L2 L1 L3 IHpWorks H5).
-rewrite app_length.
-lia.
+Proof.
+  intro n.
+  assert (Hdepth:= pn_procDepth n).
+  functional induction (pn n).
+  unfold procWorks.
+  simpl.
+  intros L Hlen Hex.
+  apply list_length0 in Hlen.
+  rewrite Hlen.
+  simpl.
+  rewrite Hlen in Hex.
+  inversion Hex.
+  unfold procWorks.
+  simpl.
+  intros L Hlen Hex.
+  apply list_length0 in Hlen.
+  rewrite Hlen in Hex.
+  inversion Hex.
+  unfold procWorks.
+  simpl.
+  intros L Hlen Hex.
+  inversion Hex.
+  inversion H0.
+  simpl.
+  reflexivity.
+  simpl.
+  reflexivity.
+  inversion H.
+  unfold procEval.
+  assert ((weigh 1 (gold :: fake :: ns0)) = Gt).
+  cbv.
+  destruct ns0.
+  reflexivity.
+  reflexivity.
+  rewrite H5.
+  simpl.
+  reflexivity.
+  rewrite<- H4 in H1.
+  rewrite<- H1 in Hlen.
+  simpl in Hlen.
+  apply Nat.succ_inj in Hlen.
+  apply Nat.succ_inj in Hlen.
+  apply list_length0 in Hlen.
+  rewrite Hlen in H2.
+  inversion H2.
+  
+  remember (n / 3) as n3.
+  unfold procWorks.
+  intros L Hlen Hex.
+  
+  assert (IHpWorks : procWorks (pn n3)).
+  apply IHp.
+  apply pn_procDepth.
+  
+  assert (IHp0Works : procWorks (pn (n3 + n mod 3))).
+  apply IHp0.
+  apply pn_procDepth.
+  clear IHp.
+  clear IHp0.
+  clear IHp1.
+  
+  assert (Hlen': length L = n).
+  elim Hdepth.
+  intro HprocDepth.
+  rewrite HprocDepth in Hlen.
+  exact Hlen.
+  intro Hn1.
+  rewrite Hn1 in Heqn3.
+  simpl in Heqn3.
+  rewrite Heqn3 in Hlen.
+  rewrite Hn1 in Hlen.
+  simpl in Hlen.
+  rewrite Hn1 .
+  exact Hlen.
+  clear Hlen.
+  
+  assert (Hn3bound: n3 <> 0).
+  rewrite Heqn3.
+  case n in *.
+  contradiction.
+  case n in *.
+  contradiction.
+  case n in *.
+  contradiction.
+  replace (S (S (S n))) with (1 * 3 + n).
+  rewrite Nat.div_add_l.
+  lia.
+  lia.
+  lia.
+  remember (n mod 3) as nm3.
+  unfold procEval.
+  simpl.
+  fold procEval.
+  
+  remember (weigh n3 L) as wgt.
+  assert (H3len : n = n3 + (n3 + (n3 + nm3))).
+  rewrite Heqn3.
+  rewrite Heqnm3.
+  rewrite (div_mod n 3) at 1.
+  lia.
+  lia.
+  rewrite<- Hlen' in H3len.
+  assert (Hsplit1:= (list_split _ L _ _ H3len)).
+  destruct Hsplit1 as [L1].
+  destruct H as [L1b].
+  decompose [and] H.
+  clear H.
+  assert (Hsplit2:=(list_split _ L1b _ _ H2)).
+  destruct Hsplit2 as [L2].
+  destruct H as [L3].
+  clear H2.
+  decompose [and] H; clear H.
+  rewrite H5 in H3; clear H5.
+  rewrite H3.
+  assert (Hex2:= (exactlyn_app_rev 1 L Hex L1 (L2 ++ L3) H3)).
+  destruct Hex2 as [nL1].
+  destruct H as [nL1b].
+  decompose [and] H.
+  clear H.
+  assert (Hduh: L2 ++ L3 = L2 ++ L3).
+  reflexivity.
+  assert (Hex3:= (exactlyn_app_rev nL1b (L2++L3) H6 L2 L3) Hduh).
+  clear Hduh.
+  destruct Hex3 as [nL2].
+  destruct H as [nL3].
+  decompose [and] H.
+  clear H.
+  rewrite H10 in H7.
+  clear H6 H10 nL1b L1b.
+  
+  assert (Hw: (nat_compare nL2 nL1) = (weigh n3 L)).
+  rewrite H3.
+  rewrite app_assoc.
+  assert (HL12: (n3 + n3) <= length (L1 ++ L2)).
+  rewrite app_length.
+  rewrite H0; rewrite H1.
+  auto.
+  rewrite<- (weigh_tl _ _ _ HL12).
+  rewrite (weigh_defn _ L1 L2 H0 H1 nL1 nL2 H2 H5).
+  reflexivity.
+  
+  (* Now that we have setup the proof, do case analysis on the sections of the list. *)
+  destruct wgt.
+  
+  (* EQ case *)
+  assert (HnL3 : nL3 = 1).
+  rewrite<- Heqwgt in Hw.
+  apply nat_compare_eq in Hw.
+  rewrite Hw in *.
+  lia.
+  
+  (* Now we know there is eactly one fake coin in L3.*)
+  rewrite HnL3 in *.
+  
+  simpl.
+  rewrite app_assoc at 1.
+  assert (H: length (L1 ++ L2) = n3 + n3).
+  rewrite app_length; rewrite H0; rewrite H1.
+  auto.
+  rewrite<- H4 in *.
+  rewrite<- H.
+  rewrite swap_app.
+  apply (pnWorks_helper L3 L1 L2 IHp0Works H9).
+  
+  (* case Lt *)
+  rewrite<- Heqwgt in Hw.
+  assert (HL1: nL1 = 1).
+  apply nat_compare_lt in Hw.
+  lia.
+  rewrite HL1 in *.
+  rewrite<- H0 in *.
+  apply (pnWorks_helper L1 L2 L3 IHpWorks H2).
+  
+  (* case Gt *)
+  rewrite<- Heqwgt in Hw.
+  assert (HL2: nL2 = 1).
+  apply nat_compare_gt in Hw.
+  lia.
+  rewrite HL2 in *.
+  rewrite app_assoc.
+  rewrite swap_tl.
+  rewrite<- H0 at 2.
+  rewrite<- H1 at 2.
+  rewrite swap_app.
+  rewrite<- app_assoc.
+  rewrite<- H1 in *.
+  apply (pnWorks_helper L2 L1 L3 IHpWorks H5).
+  rewrite app_length.
+  lia.
 Qed.
 
 Eval cbv in List.map (fun x=> procCost (pn x)) [0;1;2;3;4;5;6;7;8;9;10;11;12].
@@ -4505,54 +3973,54 @@ Lemma weigh_exactlyn:
       | Gt => exactlyn 1 L2
     end.
 Proof.
-intros L1 L2 L3 Hlen Hex.
-
-assert (H1 := (exactlyn_app_rev 1 _ Hex (L1++L2) L3)).
-destruct H1 as [n1].
-reflexivity.
-destruct H as [n2].
-decompose [and] H.
-clear H.
-assert (Hex2 := (exactlyn_app_rev n1 _ H0 L1 L2)).
-destruct Hex2 as [n3].
-reflexivity.
-destruct H as [n4].
-decompose [and] H.
-clear H.
-assert (Hlen2: length L1 + length L1 <= length (L1 ++ L2)).
-rewrite app_length.
-lia.
-rewrite<- (weigh_tl (length L1) (L1 ++ L2) L3 Hlen2).
-symmetry in Hlen.
-assert (Hduh : length L1 = length L1).
-reflexivity.
-rewrite (weigh_defn (length L1) L1 L2 Hduh Hlen n3 n4 H1 H5).
-
-(* Now we have reduced this to a nat_compare problem. *)
-remember (nat_compare n4 n3) as R.
-symmetry in HeqR.
-
-destruct R.
-rewrite H6 in H3.
-
-apply nat_compare_eq_iff in HeqR.
-
-assert (H: n2 = 1).
-lia.
-rewrite H in H2.
-exact H2.
-
-apply nat_compare_lt in HeqR.
-assert (H: n3 = 1).
-lia.
-rewrite H in H1.
-exact H1.
-
-apply nat_compare_gt in HeqR.
-assert (H: n4 = 1).
-lia.
-rewrite H in H5.
-exact H5.
+  intros L1 L2 L3 Hlen Hex.
+  
+  assert (H1 := (exactlyn_app_rev 1 _ Hex (L1++L2) L3)).
+  destruct H1 as [n1].
+  reflexivity.
+  destruct H as [n2].
+  decompose [and] H.
+  clear H.
+  assert (Hex2 := (exactlyn_app_rev n1 _ H0 L1 L2)).
+  destruct Hex2 as [n3].
+  reflexivity.
+  destruct H as [n4].
+  decompose [and] H.
+  clear H.
+  assert (Hlen2: length L1 + length L1 <= length (L1 ++ L2)).
+  rewrite app_length.
+  lia.
+  rewrite<- (weigh_tl (length L1) (L1 ++ L2) L3 Hlen2).
+  symmetry in Hlen.
+  assert (Hduh : length L1 = length L1).
+  reflexivity.
+  rewrite (weigh_defn (length L1) L1 L2 Hduh Hlen n3 n4 H1 H5).
+  
+  (* Now we have reduced this to a nat_compare problem. *)
+  remember (nat_compare n4 n3) as R.
+  symmetry in HeqR.
+  
+  destruct R.
+  rewrite H6 in H3.
+  
+  apply nat_compare_eq_iff in HeqR.
+  
+  assert (H: n2 = 1).
+  lia.
+  rewrite H in H2.
+  exact H2.
+  
+  apply nat_compare_lt in HeqR.
+  assert (H: n3 = 1).
+  lia.
+  rewrite H in H1.
+  exact H1.
+  
+  apply nat_compare_gt in HeqR.
+  assert (H: n4 = 1).
+  lia.
+  rewrite H in H5.
+  exact H5.
 Qed.
 
 (* To simplify our lives, lets try to make a higher-order function for
@@ -4721,26 +4189,26 @@ Lemma mul_div_mod_lt:
   forall n z k,
     z>1 -> n >= z -> k <= n mod z -> (n/z + k) < n.
 Proof.
-intros n z k Hz Hn Hk.
-assert (H1 : n/z + k <= n/z + n mod z).
-lia.
-apply (le_lt_trans _ (n/z + n mod z)).
-exact H1.
-apply (lt_le_trans _ ((z-1)*(n/z) + (n/z + n mod z)) _).
-apply Nat.lt_add_pos_l.
-apply Nat.mul_pos_pos.
-lia.
-apply Nat.div_str_pos.
-lia.
-
-rewrite plus_assoc.
-rewrite<- mult_succ_l.
-rewrite<- Nat.add_1_r.
-rewrite Nat.sub_add.
-rewrite<- div_mod.
-lia.
-lia.
-lia.
+  intros n z k Hz Hn Hk.
+  assert (H1 : n/z + k <= n/z + n mod z).
+  lia.
+  apply (le_lt_trans _ (n/z + n mod z)).
+  exact H1.
+  apply (lt_le_trans _ ((z-1)*(n/z) + (n/z + n mod z)) _).
+  apply Nat.lt_add_pos_l.
+  apply Nat.mul_pos_pos.
+  lia.
+  apply Nat.div_str_pos.
+  lia.
+  
+  rewrite plus_assoc.
+  rewrite<- mult_succ_l.
+  rewrite<- Nat.add_1_r.
+  rewrite Nat.sub_add.
+  rewrite<- div_mod.
+  lia.
+  lia.
+  lia.
 Qed.
 
 Function pn2 (n:nat) {measure (fun x => n ) n } :=
@@ -4755,96 +4223,96 @@ Function pn2 (n:nat) {measure (fun x => n ) n } :=
          | m =>  proc_split (pn2 d) (pn2 (d+m))
        end)
   end.
-
-(* case *)
-intros n n0 n1 Hn0 Hn Hn1.
-rewrite<- Hn.
-apply mul_div_mod_lt.
-lia.
-destruct n1.
-simpl in Hn1.
-lia.
-lia.
-lia.
-
-(* case *)
-intros n n0 n1 Hn0 Hn Hn1.
-rewrite<- Hn.
-rewrite<- (plus_0_r (n/3)).
-apply mul_div_mod_lt.
-lia.
-destruct n1.
-simpl in Hn1.
-lia.
-lia.
-lia.
-
-(* case *)
-intros n n0 n1 Hn0 Hn n2 Hn2 Hn1.
-apply mul_div_mod_lt.
-lia.
-destruct n1.
-simpl in Hn1.
-lia.
-lia.
-lia.
-
-(* case *)
-intros n n0 n1 Hn0 Hn n2 Hn2 Hn1.
-rewrite<- Hn.
-rewrite<- (plus_0_r (n/3)).
-apply mul_div_mod_lt.
-lia.
-destruct n1.
-simpl in Hn1.
-lia.
-lia.
-lia.
-
-(* case *)
-intros n n0 n1 Hn0 Hn n2 n3 Hn3 Hn2 Hn1.
-rewrite<- Hn.
-rewrite<- (plus_0_r (n/3)).
-destruct n1.
-rewrite Hn.
-simpl.
-lia.
-apply mul_div_mod_lt.
-lia.
-lia.
-lia.
-
-(* case *)
-intros n n0 n1 Hn0 Hn n2 n3 Hn3 Hn2 Hn1.
-destruct n1.
-simpl.
-lia.
-apply mul_div_mod_lt.
-lia.
-lia.
-lia.
-
-(* case *)
-intros n n0 n1 Hn0 Hn n2 n3 n4 Hn3 Hn2 Hn1.
-destruct n1.
-simpl in Hn1.
-lia.
-apply mul_div_mod_lt.
-lia.
-lia.
-lia.
-
-(* case *)
-intros n n0 n1 Hn0 Hn n2 n3 n4 Hn3 Hn2 Hn1.
-destruct n1.
-simpl in Hn1.
-lia.
-rewrite<- Hn.
-rewrite<- (plus_0_r (n/3)).
-apply mul_div_mod_lt.
-lia.
-lia.
-lia.
+Proof.
+  (* case *)
+  intros n n0 n1 Hn0 Hn Hn1.
+  rewrite<- Hn.
+  apply mul_div_mod_lt.
+  lia.
+  destruct n1.
+  simpl in Hn1.
+  lia.
+  lia.
+  lia.
+  
+  (* case *)
+  intros n n0 n1 Hn0 Hn Hn1.
+  rewrite<- Hn.
+  rewrite<- (plus_0_r (n/3)).
+  apply mul_div_mod_lt.
+  lia.
+  destruct n1.
+  simpl in Hn1.
+  lia.
+  lia.
+  lia.
+  
+  (* case *)
+  intros n n0 n1 Hn0 Hn n2 Hn2 Hn1.
+  apply mul_div_mod_lt.
+  lia.
+  destruct n1.
+  simpl in Hn1.
+  lia.
+  lia.
+  lia.
+  
+  (* case *)
+  intros n n0 n1 Hn0 Hn n2 Hn2 Hn1.
+  rewrite<- Hn.
+  rewrite<- (plus_0_r (n/3)).
+  apply mul_div_mod_lt.
+  lia.
+  destruct n1.
+  simpl in Hn1.
+  lia.
+  lia.
+  lia.
+  
+  (* case *)
+  intros n n0 n1 Hn0 Hn n2 n3 Hn3 Hn2 Hn1.
+  rewrite<- Hn.
+  rewrite<- (plus_0_r (n/3)).
+  destruct n1.
+  rewrite Hn.
+  simpl.
+  lia.
+  apply mul_div_mod_lt.
+  lia.
+  lia.
+  lia.
+  
+  (* case *)
+  intros n n0 n1 Hn0 Hn n2 n3 Hn3 Hn2 Hn1.
+  destruct n1.
+  simpl.
+  lia.
+  apply mul_div_mod_lt.
+  lia.
+  lia.
+  lia.
+  
+  (* case *)
+  intros n n0 n1 Hn0 Hn n2 n3 n4 Hn3 Hn2 Hn1.
+  destruct n1.
+  simpl in Hn1.
+  lia.
+  apply mul_div_mod_lt.
+  lia.
+  lia.
+  lia.
+  
+  (* case *)
+  intros n n0 n1 Hn0 Hn n2 n3 n4 Hn3 Hn2 Hn1.
+  destruct n1.
+  simpl in Hn1.
+  lia.
+  rewrite<- Hn.
+  rewrite<- (plus_0_r (n/3)).
+  apply mul_div_mod_lt.
+  lia.
+  lia.
+  lia.
 Defined.
 
 Lemma plus_eq_self_r:
@@ -4857,35 +4325,34 @@ Qed.
 Lemma pn2_depth:
   forall n:nat, procDepth (pn2 n) = n.
 Proof.
-intros n.
+  intros n.
 
-functional induction (pn2 n).
-simpl; lia.
-simpl; lia.
-
-assert (Hez :  n / 3 + 1 + (n / 3 + 1) + n / 3 = 3 * (n/3) + 2).
-lia.
-
-rewrite proc_split_depth.
-rewrite IHp.
-rewrite IHp0.
-rewrite Hez.
-rewrite<- e0 at 3.
-symmetry.
-apply div_mod.
-lia.
-
-
-rewrite proc_split_depth.
-rewrite IHp.
-rewrite IHp0.
-
-assert (Hez :  n / 3 + n / 3 + (n / 3 + n mod 3) = 3 * (n/3) + n mod 3).
-lia.
-rewrite Hez.
-rewrite<- div_mod.
-auto.
-auto.
+  functional induction (pn2 n).
+  simpl; lia.
+  simpl; lia.
+  
+  assert (Hez :  n / 3 + 1 + (n / 3 + 1) + n / 3 = 3 * (n/3) + 2).
+  lia.
+  
+  rewrite proc_split_depth.
+  rewrite IHp.
+  rewrite IHp0.
+  rewrite Hez.
+  rewrite<- e0 at 3.
+  symmetry.
+  apply div_mod.
+  lia.
+  
+  rewrite proc_split_depth.
+  rewrite IHp.
+  rewrite IHp0.
+  
+  assert (Hez :  n / 3 + n / 3 + (n / 3 + n mod 3) = 3 * (n/3) + n mod 3).
+  lia.
+  rewrite Hez.
+  rewrite<- div_mod.
+  auto.
+  auto.
 Qed.
 
 Lemma pn2Works:
@@ -5143,7 +4610,6 @@ Proof.
 
   auto.
 
-
   (* Case n mod 3 <> 2 *)
   unfold proc_split.
   unfold procCost. fold procCost.
@@ -5204,7 +4670,6 @@ Proof.
   unfold proc_split; unfold procCost; fold procCost.
 
   rewrite<- Heqcn3.
-
   
   apply plus_le_compat_l.
   apply Nat.max_le_compat_l.
@@ -5241,7 +4706,6 @@ Proof.
 
   rewrite Hm in Heqcnm3.
   rewrite<- Heqcnm3.
-
 
   rewrite (Max.max_assoc _ cn3 _).
   rewrite (Max.max_comm _ cn3).
