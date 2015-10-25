@@ -15,12 +15,15 @@ them.  For example, you may or may not know that the fake is lighter
 or heavier than the real coins.
 *)
 
-Require Import Bool.
+
 Require Import Arith.
+Require Import Bool.
+Require Import Coq.Numbers.Natural.Peano.NPeano.
 Require Import List.
 Require Import ListSet.
-Require Import Coq.Numbers.Natural.Peano.NPeano.
+Require Import Permutation.
 Require Import Psatz.
+
 Import ListNotations.
 
 Require Import Elementary.
@@ -42,10 +45,11 @@ Definition coin_weight c :=
     | fake => 1
   end.
 
-(** This definition is not ideal. By this definition we limit our
-encoding to problems where we know the reltionship between the weight
-of the fake coins and the gold coins. *)
+(** This definition is not ideal. It limits this encoding to problems
+where the relationship between the weight of the fake coins and the
+gold coins is known. *)
 
+(** ** Exactlyn *)
 (* The predicate [[exactlyn]] defines valid sets with a given number
 of fake coins. *)
 
@@ -57,184 +61,17 @@ Inductive exactlyn : nat -> coins -> Prop :=
 
 Hint Constructors exactlyn.
 
-(** * Encoding weighing
-
-Encoding "usage of the scale" directly in CIC would require some kind
-of resource logic (linear logic), we must be more creative.
-
-To solve this problem, we define a small language for encoding the
-decision procedure (proc).  A given decision procedure is a finite
-tree.  We can count the occurences of "weighings" along any path thus
-determining the maximum number of times the scale was used.  And we
-can then prove that the given procedure finds the forgery no matter
-the input.
-
-*)
-
-(** [[proc]] is the encoding of a decision procedure that takes as input
-some [[coins]] and returns those same [[coins]] in a different order.
-
-  - Stop : Stops execution
-  - Swap n m p: Swaps the m elements starting at the nth element to the 
-    head of the list.
-  - Weigh n pLt pEq pGt : Weighs the first n coins against the next n, 
-    and then calls the appropriate procedure.
-
-Notice that this language only admits finite programs, and every
-program represents a legal set of operations.
-*)
-Inductive proc : Set := 
-   | Stop  
-   | Swap : nat -> nat -> proc -> proc 
-   | Weigh : nat -> proc -> proc -> proc -> proc
-.
-
-Hint Constructors proc.
-
-(** To bring [[proc]] to life, implement a semantics for the language.
-*)
-
-(** ** Swap *)
-
-(** Extract the nth element from a list, and leave the remainder. *)
-Fixpoint swap_rec (A: Type) (L: list A)  (n:nat)  (m:nat) : ((list A) * (list A)) := 
-  match L,n,m with
-  | nil, _,_ =>  (nil,L)
-  | _,0,0 => (nil,L)
-  | car::cdr,0,S k => (fun p => (car :: (fst p), (snd p))) (swap_rec A cdr 0 k)
-  | car::cdr,S n,_ =>  (fun p => (fst p, car :: snd p)) (swap_rec A cdr n m)
-end.
-
-(** This is the main definition used by the Swap instruction. *)
-Definition swap (A:Type) (L: list A) (n:nat) (m:nat) :=
-    ((fun p => ((fst p) ++ (snd p))) (swap_rec A L n m))
-.
-
-(** This alternate definition is equivalent. As we will prove later. *)
-Definition swap_alt (A:Type) (L:list A) (n:nat) (m:nat) :=
-  (firstn m (skipn n L)) ++ (firstn n L) ++ (skipn (n+m) L)
-.
-
-(** ** Weigh *)
-
-(** Sum up the weights of a set of coins. *)
-Definition coin_sum (cs : coins) : nat := ListSet.set_fold_right plus (List.map coin_weight cs) 0.
-
-Hint Unfold coin_sum set_fold_right.
-
-
-Lemma sum_cons:
-  forall L:coins, forall a:coin, coin_sum (a::L) = (coin_weight a) + (coin_sum L).
-Proof.
-  auto.
-Qed.
-
-(** Pick the first n elements of the list *)
-Fixpoint pick_rec (A:Type) (n:nat) (L : list A) : (list A * list A) :=
-   match L,n with
-   | nil,_ => (nil,nil)
-   | _,0 => (nil,L)
-   | car::cdr,(S n) => 
-       (fun p => ((car :: (fst p)), snd p)) (pick_rec A n cdr)
-end.
-
-Definition weigh (n:nat) (L : coins) :=
-    let (a,rest) := pick_rec coin n L in
-    let (b,rest2) := pick_rec coin n rest in
-    nat_compare (coin_sum a) (coin_sum b)
-.
-
-(** ** Evaluation *)
-
-(* Evaluate a weighing procedure. Given a set of coins this returns a
-reordered set. Consider this procedure a solution if the fake coin is at the
-head of the list. *) 
-
-Fixpoint procEval (p: proc) (g: coins) : coins := match p with
-| Stop => g
-| Swap n m p => (procEval p (swap coin g n m))
-| Weigh n plt peq pgt => 
-  (match weigh n g with
-  | Lt => (procEval plt g)
-  | Eq => (procEval peq g)
-  | Gt => (procEval pgt g)
-  end)
-end.
-
-(** * Properties of Interest *)
-
-(** Count the number of uses of a scale in a procedure. *)
-Fixpoint procCost (p:proc) : nat :=
-  match p with
-  | Stop => 0
-  | Swap _ _ p => procCost p
-  | Weigh _  p1 p2 p3 => 1 + max (procCost p1) (max (procCost p2) (procCost p3))
-  end.
-
-(** Maximum size stack this procedure can observe. *)
-Fixpoint procDepth (p:proc) : nat :=
-  (match p with 
-  | Stop => 0
-  | Swap n m p => max (n+m) (procDepth p)
-  | Weigh n p1 p2 p3 => max (n + n) (max (max (procDepth p1) (procDepth p2)) (procDepth p3))
-  end).
-
-
-(** * Correctness 
-
-For [[proc]] to be a valid encoding of the intended problem it is
-important that procedures cannot manufacture coins or otherwise
-cheat. To encode this correctness criteria establish that the output
-is always a permutation of the input.
-
-*)
-
-Require Import Permutation.
-
-Hint Unfold swap swap_rec.
-Hint Resolve Permutation_cons Permutation_cons_app.
-
-Lemma swap_unfold_app:
-  forall L:coins, forall m:nat,
-    (fst (swap_rec coin L 0 m) ++ snd (swap_rec coin L 0 m)) = (swap coin L 0 m).
-Proof.
-  auto.
-Qed.
-
-Hint Rewrite swap_unfold_app.
-
-Lemma swap_permutation_app:
-  forall L:coins, forall a:coin, forall m k:nat,
-    Permutation L (swap coin L m k) -> Permutation (a::L) (swap coin (a::L) (S m) k).
-Proof.
-  intros L a m k H.
-  unfold swap; simpl; apply Permutation_cons_app; exact H.
-Qed.
-
-Hint Resolve swap_permutation_app.
-
-(** * Smash 
-
-Smash is a primitive tactic inspired by Adam Chilpala's crush.  It
-doesn't always work, but when it does it can eliminate some very
-tedious proofs.
-
-*)
-
-Ltac smash := 
+Ltac mini_smash := 
   repeat 
     (auto;simpl;
      match goal with
        | [ H : ?P |- ?P ] => (exact H)
-       | [ |- context [swap _ _ 0 _]] => (unfold swap; simpl; rewrite swap_unfold_app)
        | [ |- exactlyn _ (gold :: _)] => apply exactlyn_gold
        | [ H : forall x:nat, _ -> _, _:nat |- _] => apply H
        | [ |- forall x:_, _ ] => intro x
        | [ |- (exactlyn _ _) -> _ ] => inversion 1
        | [ H : fake = ?X, H' : context[?X] |- _] => (rewrite<- H in H')
        | [ H : (exactlyn _ _) |- _ ] => (inversion H)
-       | [ H : forall L:_, Permutation _ _ |- Permutation ?X1 (procEval _ ?X2) ] => 
-             (apply Permutation_trans with (l' := X2))  
        | [ |- context [match ?X with | Lt => _ | Gt => _ | Eq => _ end] ] => (case X) 
        | [ |- ?X1 :: _ = ?X1 :: _ ] => f_equal
        | [ |- context [length (?X1 :: ?X2)] ] => 
@@ -245,20 +82,9 @@ Ltac smash :=
          rewrite H)
       | [H : ?X1 = ?X2 |- ?X3 = ?X4 ] => rewrite H
       | [ |- _ ++ ?X1 :: _ = _ ++ ?X1 :: _ ] => f_equal
-
      end); 
   auto
 .
-
-Lemma swap_permutes:
-  forall L:coins, forall k m:nat, Permutation L (swap coin L k m).
-Proof.
-  induction L; auto.
-  destruct k; auto.
-  destruct m; smash.
-Qed.
-
-Hint Resolve swap_permutes.
 
 Lemma exactlyn_permutes:
   forall (nsl  nsl' : coins),
@@ -267,556 +93,22 @@ Proof.
   intros nsl nsl'; induction 1.
   auto.
   intro n; inversion 1.
-  smash.
-  smash.
-  smash.
-  smash.
+  mini_smash.
+  mini_smash.
+  mini_smash.
+  mini_smash.
 Qed.
 
 Hint Resolve exactlyn_permutes.
-
-Lemma procEval_permutes:
-  forall p:proc, forall L : coins, Permutation L  (procEval p L).
-Proof.
-  induction p.
-  smash.
-  smash.
-  smash.
-Qed.
-
-(** * Example with 4 and 12 coins *)
-
-(* Given 4 coins where one is fake. Find the fake one. [[p4] encodes a
-solution to this problem. Proof below. *)
-
-Definition p4 : proc :=
-   (Weigh 1 
-       Stop 
-        (Swap 2 2 (Weigh 1 Stop Stop (Swap 1 1 Stop)))
-        (Swap 1 1 Stop)).
-
-Example p4Example1:
-  procEval p4 [gold;gold;fake;gold] = [fake;gold;gold;gold].
-Proof.
-  compute.
-  reflexivity.
-Qed.
-
-(** Given twelve coins where one is lighter, Find the lighter one.
-[[p12]] is a solution to this problem (proof below). *)
-Definition p12 : proc :=
-    (Weigh 4
-        p4
-         (Swap 8 4 p4)
-         (Swap 4 4 p4)).
-
-(** Examples used to test the proposed solution. *)
-Definition ex1 : coins := [gold;gold;gold;gold; gold;gold;gold;gold; gold;gold;gold;fake].
-Definition ex2 : coins := [gold;fake;gold;gold; gold;gold;gold;gold; gold;gold;gold;gold].
-Definition ex3 : coins := [gold;gold;gold;gold; gold;gold;fake;gold; gold;gold;gold;gold].
-
-
-(* Now verify that everything worka. *)
-Eval cbv in (procEval p12 ex1).
-Eval cbv in (procEval p12 ex2).
-Eval cbv in (procEval p12 ex3).
-
-Eval simpl in (procCost p12).
-
-Lemma procEval_length:
-  forall p:proc, forall L:coins, (length L) = (length (procEval p L)).
-Proof.
-  intros p L.
-  apply Permutation_length.
-  apply procEval_permutes.
-Qed.
-
-Hint Rewrite procEval_length.
-
-Lemma swap_rec_fst_len:
-  forall A:Type, forall L:list A, forall n m:nat,
-    (length (fst (swap_rec A L n m))) = (min ((length L)-n) m).
-Proof.
-  intros A L.
-  induction L.
-  simpl; reflexivity.
-  induction n.
-  induction m.
-  simpl; reflexivity.
-  simpl.
-  f_equal.
-  replace (length L) with ((length L) - 0).
-  apply IHL.
-  rewrite minus_n_O.
-  reflexivity.
-  induction m.
-  simpl.
-  apply IHL.
-  simpl.
-  apply IHL.
-Qed.
-
-Lemma swap_equiv:
-  forall A:Type, forall L: list A, forall n m:nat,
-    (swap A L n m) = (swap_alt A L n m).
-Proof.
-  intros A L.
-  induction L.
-  unfold swap; unfold swap_alt.
-  simpl.
-  destruct n.
-  simpl.
-  destruct m.
-  simpl; reflexivity.
-  simpl; reflexivity.
-  destruct m.
-  simpl;reflexivity.
-  simpl;reflexivity.
-  unfold swap; unfold swap_alt.
-  induction n.
-  simpl.
-  induction m.
-  simpl; reflexivity.
-  simpl.
-  f_equal.
-  apply IHL.
-  simpl.
-  intro m.
-  apply app_cons_ignore.
-  rewrite swap_rec_fst_len.
-  rewrite List.firstn_length.
-  rewrite Min.min_comm at 1.
-  f_equal.
-  rewrite skipn_length.
-  reflexivity.
-  apply IHL.
-Qed.
-
-Lemma swap_tl:
-  forall A: Type, forall Lhd Ltl : (list A), forall n m : nat, 
-    ((n+m) <= length Lhd) -> (swap A (Lhd ++ Ltl) n m) = (swap A Lhd n m) ++ Ltl.
-Proof.
-  intros A Lhd.
-  induction Lhd.
-  simpl.
-  intros Ltl n m.
-  intro Hlen.
-  apply le_n_0_eq in Hlen.
-  symmetry in Hlen.
-  apply plus_is_O in Hlen.
-  elim Hlen.
-  intros n0 m0.
-  rewrite n0; rewrite m0.
-  unfold swap.
-  case Ltl.
-  simpl;reflexivity.
-  simpl;reflexivity.
-  intros Ltl n m.
-  induction n.
-  simpl.
-  induction m.
-  intro.
-  unfold swap; unfold swap_rec.
-  simpl; reflexivity.
-  intro Hlen.
-  unfold swap; unfold swap_rec.
-  fold swap_rec.
-  simpl.
-  f_equal.
-  apply (IHLhd Ltl 0 m).
-  simpl.
-  apply le_S_n.
-  exact Hlen.
-  intro Hlen.
-  unfold swap; unfold swap_rec.
-  fold swap_rec.
-  simpl.
-  assert ((n+m) <= length Lhd).
-  apply le_S_n.
-  rewrite <- plus_Sn_m.
-  replace (S (length Lhd)) with (length (a::Lhd)).
-  exact Hlen.
-  simpl;reflexivity.
-  rewrite <- app_assoc.
-  simpl.
-  apply app_cons_ignore.
-  rewrite swap_rec_fst_len.
-  rewrite swap_rec_fst_len.
-  replace (min (length (Lhd ++ Ltl) - n) m) with m.
-  replace (min (length Lhd - n) m) with m.
-  reflexivity.
-  symmetry.
-  apply Min.min_r.
-  apply NPeano.Nat.le_add_le_sub_r.
-  rewrite plus_comm.
-  exact H.
-  symmetry.
-  apply Min.min_r.
-  apply NPeano.Nat.le_add_le_sub_r.
-  rewrite app_length.
-  apply le_plus_trans.
-  rewrite plus_comm.
-  exact H.
-  unfold swap in IHLhd.
-  rewrite app_assoc.
-  apply (IHLhd Ltl n m).
-  exact H.
-Qed.
-
-Lemma swap_app: 
-  forall A:Type, forall L1 L2:list A, 
-    swap A (L1 ++ L2) (length L1) (length L2) = (L2 ++ L1).
-Proof.
-  intros A L1 L2.
-  rewrite swap_equiv.
-  unfold swap_alt.
-  rewrite skipn_app.
-  rewrite firstn_id.
-  rewrite app_assoc.
-  rewrite firstn_length_app.
-  rewrite<- app_length.
-  rewrite<- (app_nil_r (L1 ++ L2)) at 2. 
-  rewrite skipn_app.
-  rewrite app_nil_r.
-  reflexivity.
-Qed.
-
-Lemma fst_pick_rec: 
-  forall A:Type, forall L : list A, forall n:nat,
-    length L = n -> fst(pick_rec A n L) = L.
-Proof.
-  intros A L.
-  induction L.
-  intros n Hlen.
-  simpl in Hlen.
-  rewrite <- Hlen.
-  simpl.
-  reflexivity.
-  intro n.
-  intro Hlen.
-  simpl in Hlen.
-  rewrite<- Hlen.
-  simpl.
-  f_equal.
-  apply IHL.
-  reflexivity.
-Qed.
-
-Lemma fst_pick_rec_tl:
-  forall A:Type, forall n:nat, forall Lhd Ltl : list A, 
-    (n <= length Lhd) -> fst(pick_rec A n Lhd) = fst (pick_rec A n (Lhd ++ Ltl)).
-Proof.
-  intro A.
-  induction n.
-  intro Lhd.
-  simpl.
-  destruct Lhd, Ltl.
-  auto.
-  auto.
-  auto.
-  auto.
-  simpl.
-  destruct Lhd.
-  simpl.
-  intros Ltl H.
-  apply NPeano.Nat.nle_succ_0 in H.
-  contradiction.
-  simpl.
-  intro Ltl.
-  intro H.
-  apply le_S_n in H.
-  f_equal.
-  apply IHn.
-  exact H.
-Qed.
-
-Lemma fst_pick_rec_app:
-  forall A:Type, forall n:nat, forall L1 L2: list A,
-    (length L1) = n -> fst(pick_rec A n (L1++L2)) = L1.
-Proof.
-  intros A n L1 L2 Hlen.
-  rewrite<- fst_pick_rec_tl.
-  rewrite fst_pick_rec.
-  reflexivity.
-  exact Hlen.
-  rewrite Hlen.
-  apply le_n.
-Qed.
-
-Lemma snd_pick_rec: 
-  forall A:Type, forall L1 L2 : list A, forall n:nat,
-    (length L1) = n -> (snd (pick_rec A n (L1 ++ L2))) = L2.
-Proof.
-  intros A L1.
-  induction L1.
-  intros L2 n Hlen.
-  simpl in Hlen.
-  rewrite <- Hlen.
-  simpl.
-  destruct L2.
-  simpl; reflexivity.
-  simpl; reflexivity.
-  intros L2 n Hlen.
-  simpl in Hlen.
-  rewrite <- Hlen.
-  simpl.
-  apply IHL1.
-  reflexivity.
-Qed.
-
-Lemma snd_pick_rec_tl:
-  forall A:Type, forall n:nat, forall Lhd Ltl : list A, 
-    (n <= length Lhd) -> snd(pick_rec A n Lhd)++Ltl = snd (pick_rec A n (Lhd ++ Ltl)).
-Proof.
-  intros A n.
-  induction n.
-  destruct Lhd.
-  simpl.
-  destruct Ltl.
-  auto.
-  auto.
-  simpl.
-  reflexivity.
-  intros Lhd Ltl H.
-  destruct Lhd.
-  simpl.
-  destruct Ltl.
-  auto.
-  simpl.
-  simpl in H.
-  apply NPeano.Nat.nle_succ_0 in H.
-  contradiction.
-  simpl.
-  apply IHn.
-  simpl in H.
-  apply le_S_n in H.
-  exact H.
-Qed.
-
-Lemma snd_pick_rec_length:
-  forall A:Type, forall n:nat, forall L: list A, 
-    (length (snd (pick_rec A n L))) = (length L) - n.
-Proof.
-  intros A n.
-  induction n.
-  simpl.
-  destruct L.
-  auto.
-  simpl.
-  auto.
-  simpl.
-  destruct L.
-  auto.
-  simpl.
-  apply IHn.
-Qed.
-
-Lemma weigh_tl:
-  forall n:nat, forall Lhd Ltl: coins,
-    (n+n <= length Lhd) -> weigh n Lhd = weigh n (Lhd ++ Ltl).
-Proof.
-  induction n.
-  simpl.
-  unfold weigh.
-  simpl.
-  destruct Lhd.
-  simpl.
-  destruct Ltl.
-  auto.
-  auto.
-  auto.
-  intros Lhd Ltl Hlen.
-  unfold weigh.
-  rewrite (surjective_pairing (pick_rec coin (S n) Lhd) ).
-  rewrite (surjective_pairing (pick_rec coin (S n) (Lhd++Ltl))).
-  rewrite (surjective_pairing _).
-  rewrite (surjective_pairing (pick_rec coin (S n) (snd (pick_rec coin (S n) (Lhd ++ Ltl))))).
-  rewrite <- fst_pick_rec_tl.
-  rewrite <- snd_pick_rec_tl.
-  rewrite <- fst_pick_rec_tl.
-  reflexivity.
-  simpl.
-  destruct Lhd.
-  simpl.
-  simpl in Hlen.
-  apply NPeano.Nat.nle_succ_0 in Hlen.
-  contradiction.
-  simpl.
-  rewrite snd_pick_rec_length.
-  apply  NPeano.Nat.le_add_le_sub_r.
-  simpl in Hlen.
-  apply le_S_n in Hlen.
-  replace (S n + n) with (n + S n).
-  exact Hlen.
-  rewrite plus_comm at 1.
-  reflexivity.
-  apply (NPeano.Nat.le_le_add_le 0 (S n)).
-  apply le_0_n.
-  rewrite <- plus_n_O.
-  exact Hlen.
-  apply (NPeano.Nat.le_le_add_le 0 (S n)).
-  apply le_0_n.
-  rewrite <- plus_n_O.
-  exact Hlen.
-Qed.  
-
-Lemma swap_length:
-  forall A:Type, forall L: list A, forall n m:nat,
-    length L = length (swap A L n m).
-Proof.
-  intros A L.
-  induction L.
-  simpl; reflexivity.
-  simpl.
-  unfold swap.
-  simpl.
-  induction n.
-  induction m.
-  simpl; reflexivity.
-  simpl.
-  apply eq_S.
-  apply IHL.
-  simpl.
-  intro m.
-  rewrite app_length.
-  unfold length at 3.
-  rewrite NPeano.Nat.add_succ_r.
-  f_equal.
-  rewrite<- app_length.
-  apply IHL.
-Qed.
-
-Lemma procDepth_tl:
-  forall p:proc, forall Lhd Ltl : coins,   
-    ((procDepth p) <= (length Lhd)) -> (procEval p (Lhd++Ltl)) = (procEval p Lhd) ++ Ltl.
-Proof.
-  intro p.
-  induction p.
-  simpl; reflexivity.
-  intros Lhd Ltl.
-  unfold procDepth.
-  fold procDepth.
-  intro Hlen.
-  unfold procEval.
-  fold procEval.
-  rewrite swap_tl.
-  apply IHp.
-  apply Max.max_lub_r in Hlen.
-  rewrite <- swap_length.
-  exact Hlen.
-  apply Max.max_lub_l in Hlen.
-  exact Hlen.
-  unfold procDepth.
-  fold procDepth.
-  intros Lhd Ltl Hlen.
-  unfold procEval.
-  fold procEval.
-  rewrite IHp1.
-  rewrite IHp2.
-  rewrite IHp3.
-  rewrite<- weigh_tl.
-  destruct (weigh n Lhd).
-  reflexivity.
-  reflexivity.
-  reflexivity.
-  apply Max.max_lub_l in Hlen.
-  exact Hlen.
-  apply Max.max_lub_r in Hlen.
-  apply Max.max_lub_r in Hlen.
-  exact Hlen.
-  apply Max.max_lub_r in Hlen.
-  apply Max.max_lub_l in Hlen.
-  apply Max.max_lub_r in Hlen.
-  exact Hlen.
-  apply Max.max_lub_r in Hlen.
-  apply Max.max_lub_l in Hlen.
-  apply Max.max_lub_l in Hlen.
-  exact Hlen.
-Qed.
-
-(* Now we can apply all of our hard earned knowledge to prove that our solution p4 works. *)
-Lemma p4Works:
-  forall L: coins, (length L = 4) -> (exactlyn 1 L) -> ((hd gold (procEval p4 L)) = fake).
-Proof.
-  intro L.
-  intro Hlen.
-  intro Hone.
-  assert (length (procEval p4 L) = length L).
-  apply Permutation_length.
-  symmetry.
-  apply procEval_permutes.
-  rewrite Hlen in H.
-  induction L.
-  inversion Hone.
-  induction L.
-  inversion Hlen.
-  induction L; inversion Hlen.
-  induction L; inversion Hlen.
-  induction L.
-  unfold procEval; unfold p4.
-  unfold weigh.
-  unfold pick_rec.
-  simpl.
-  unfold coin_sum.
-  simpl.
-  clear IHL.
-  clear IHL0.
-  clear IHL1.
-  clear IHL2.
-  clear H1.
-  clear H2.
-  clear Hlen.
-  inversion Hone.
-  inversion H2.
-  simpl; reflexivity.
-  inversion H2.
-  simpl; reflexivity.
-  simpl.
-  inversion H6.
-  inversion H10.
-  simpl; reflexivity.
-  inversion H10.
-  simpl; reflexivity.
-  simpl.
-  rewrite H12.
-  rewrite <- H12 in H10.
-  inversion H10.
-  inversion H14.
-  clear IHL.
-  clear IHL0.
-  clear IHL1.
-  clear IHL2.
-  clear H1.
-  clear H2.
-  clear IHL3.
-  simpl in Hlen.
-  exfalso.
-  apply eq_add_S in Hlen.
-  apply eq_add_S in Hlen.
-  apply eq_add_S in Hlen.
-  apply eq_add_S in Hlen.
-  apply NPeano.Nat.neq_succ_0 in Hlen.
-  exact Hlen.
-Qed.
-
-Lemma p12Depth:
-  procDepth p12 = 12.
-Proof.
-  auto.
-Qed.
 
 Lemma exactlyn_len:
   forall L:coins,  forall n:nat, exactlyn n L -> n <= (length L).
 Proof.
   intro L.
   induction L.
+  mini_smash.
   intro n.
   inversion 1.
-  simpl.
-  apply le_refl.
-  intro n.
-  inversion 1.
-  simpl.
   apply le_n_S.
   apply IHL.
   exact H2.
@@ -1037,86 +329,249 @@ Proof.
   exact H4.
 Qed.
 
-Lemma weigh_split: 
-  forall n:nat, forall a:coin, forall L1 L2 :coins,
-    length L1 = n -> length L2 = n  -> weigh (S n) (a::L1 ++ (a::L2)) = weigh n (L1 ++ L2).
+(** * Encoding weighing
+
+Encoding "usage of the scale" directly in CIC would require some kind
+of resource logic (linear logic), we must be more creative.
+
+To solve this problem, we define a small language for encoding the
+decision procedure (proc).  A given decision procedure is a finite
+tree.  We can count the occurences of "weighings" along any path thus
+determining the maximum number of times the scale was used.  And we
+can then prove that the given procedure finds the forgery no matter
+the input.
+
+*)
+
+(** [[proc]] is the encoding of a decision procedure that takes as input
+some [[coins]] and returns those same [[coins]] in a different order.
+
+  - Stop : Stops execution
+  - Swap n m p: Swaps the m elements starting at the nth element to the 
+    head of the list.
+  - Weigh n pLt pEq pGt : Weighs the first n coins against the next n, 
+    and then calls the appropriate procedure.
+
+Notice that this language only admits finite programs, and every
+program represents a legal set of operations.
+*)
+Inductive proc : Set := 
+   | Stop  
+   | Swap : nat -> nat -> proc -> proc 
+   | Weigh : nat -> proc -> proc -> proc -> proc
+.
+
+Hint Constructors proc.
+
+(** To bring [[proc]] to life, implement a semantics for the language.
+*)
+
+(** ** Swap *)
+
+(** Extract the nth element from a list, and leave the remainder. *)
+Fixpoint swap_rec (A: Type) (L: list A)  (n:nat)  (m:nat) : ((list A) * (list A)) := 
+  match L,n,m with
+  | nil, _,_ =>  (nil,L)
+  | _,0,0 => (nil,L)
+  | car::cdr,0,S k => (fun p => (car :: (fst p), (snd p))) (swap_rec A cdr 0 k)
+  | car::cdr,S n,_ =>  (fun p => (fst p, car :: snd p)) (swap_rec A cdr n m)
+end.
+
+(** This is the main definition used by the Swap instruction. *)
+Definition swap (A:Type) (L: list A) (n:nat) (m:nat) :=
+    ((fun p => ((fst p) ++ (snd p))) (swap_rec A L n m))
+.
+
+(** This alternate definition is equivalent. As we will prove later. *)
+Definition swap_alt (A:Type) (L:list A) (n:nat) (m:nat) :=
+  (firstn m (skipn n L)) ++ (firstn n L) ++ (skipn (n+m) L)
+.
+
+Lemma swap_rec_fst_len:
+  forall A:Type, forall L:list A, forall n m:nat,
+    (length (fst (swap_rec A L n m))) = (min ((length L)-n) m).
 Proof.
-  intro n.
+  intros A L.
+  induction L.
+  simpl; reflexivity.
   induction n.
-  intros a L1 L2 Hlen1 Hlen2.
-  apply list_length0 in Hlen1.
-  apply list_length0 in Hlen2.
-  rewrite Hlen1; rewrite Hlen2.
+  induction m.
+  simpl; reflexivity.
   simpl.
-  unfold weigh.
-  unfold pick_rec.
+  f_equal.
+  replace (length L) with ((length L) - 0).
+  apply IHL.
+  rewrite minus_n_O.
+  reflexivity.
+  induction m.
   simpl.
-  apply nat_compare_eq_iff.
+  apply IHL.
+  simpl.
+  apply IHL.
+Qed.
+
+Lemma swap_equiv:
+  forall A:Type, forall L: list A, forall n m:nat,
+    (swap A L n m) = (swap_alt A L n m).
+Proof.
+  intros A L.
+  induction L.
+  unfold swap; unfold swap_alt.
+  simpl.
+  destruct n.
+  simpl.
+  destruct m.
+  simpl; reflexivity.
+  simpl; reflexivity.
+  destruct m.
+  simpl;reflexivity.
+  simpl;reflexivity.
+  unfold swap; unfold swap_alt.
+  induction n.
+  simpl.
+  induction m.
+  simpl; reflexivity.
+  simpl.
+  f_equal.
+  apply IHL.
+  simpl.
+  intro m.
+  apply app_cons_ignore.
+  rewrite swap_rec_fst_len.
+  rewrite List.firstn_length.
+  rewrite Min.min_comm at 1.
+  f_equal.
+  rewrite skipn_length.
   reflexivity.
-  intros a L1 L2.
-  destruct L1.
-  intro Hlen1.
-  simpl in Hlen1.
-  symmetry in Hlen1.
-  apply NPeano.Nat.neq_succ_0 in Hlen1.
-  contradiction.
-  destruct L2.
-  intros Hlen1 Hlen2.
-  symmetry in Hlen2.
-  simpl in Hlen2.
-  apply NPeano.Nat.neq_succ_0 in Hlen2.
-  contradiction.
-  intro Hlen1; simpl in Hlen1.
-  intro Hlen2; simpl in Hlen2.
-  unfold weigh in IHn.
-  specialize (IHn a L1 L2).
-  rewrite (surjective_pairing (pick_rec coin (S n) (a :: L1 ++ a :: L2))) in IHn.
-  rewrite app_comm_cons in IHn.
-  rewrite snd_pick_rec in IHn.
-  rewrite fst_pick_rec_app in IHn.
-  rewrite (surjective_pairing (pick_rec coin (S n) _ )) in IHn.
-  rewrite fst_pick_rec in IHn.
-  apply eq_add_S in Hlen1.
-  apply eq_add_S in Hlen2.
-  specialize (IHn Hlen1 Hlen2).
-  rewrite (surjective_pairing (pick_rec coin n (L1 ++ L2))) in IHn.
-  rewrite fst_pick_rec_app in IHn.
-  rewrite (surjective_pairing (pick_rec coin n _)) in IHn.
-  rewrite snd_pick_rec in IHn.
-  rewrite fst_pick_rec in IHn.
-  unfold weigh.
-  rewrite (surjective_pairing (pick_rec coin (S (S n)) (a::(c :: L1) ++ a::c0::L2))).
-  rewrite app_comm_cons.
-  rewrite snd_pick_rec.
-  rewrite fst_pick_rec_app.
-  rewrite (surjective_pairing (pick_rec coin (S (S n)) _)).
-  rewrite fst_pick_rec.
-  rewrite (surjective_pairing (pick_rec coin (S n) _)).
-  rewrite snd_pick_rec.
-  rewrite fst_pick_rec_app.
-  rewrite (surjective_pairing (pick_rec _ (S n) _)).
-  rewrite fst_pick_rec.
-  rewrite sum_cons.
-  rewrite sum_cons.
-  rewrite sum_cons; rewrite sum_cons.
-  rewrite plus_assoc.
-  rewrite plus_assoc.
-  rewrite <-  plus_assoc.
-  rewrite <- plus_assoc.
-  rewrite nat_compare_plus.
+  apply IHL.
+Qed.
+
+Lemma swap_tl:
+  forall A: Type, forall Lhd Ltl : (list A), forall n m : nat, 
+    ((n+m) <= length Lhd) -> (swap A (Lhd ++ Ltl) n m) = (swap A Lhd n m) ++ Ltl.
+Proof.
+  intros A Lhd.
+  induction Lhd.
+  simpl.
+  intros Ltl n m.
+  intro Hlen.
+  apply le_n_0_eq in Hlen.
+  symmetry in Hlen.
+  apply plus_is_O in Hlen.
+  elim Hlen.
+  intros n0 m0.
+  rewrite n0; rewrite m0.
+  unfold swap.
+  case Ltl.
+  simpl;reflexivity.
+  simpl;reflexivity.
+  intros Ltl n m.
+  induction n.
+  simpl.
+  induction m.
+  intro.
+  unfold swap; unfold swap_rec.
+  simpl; reflexivity.
+  intro Hlen.
+  unfold swap; unfold swap_rec.
+  fold swap_rec.
+  simpl.
+  f_equal.
+  apply (IHLhd Ltl 0 m).
+  simpl.
+  apply le_S_n.
+  exact Hlen.
+  intro Hlen.
+  unfold swap; unfold swap_rec.
+  fold swap_rec.
+  simpl.
+  assert ((n+m) <= length Lhd).
+  apply le_S_n.
+  rewrite <- plus_Sn_m.
+  replace (S (length Lhd)) with (length (a::Lhd)).
+  exact Hlen.
+  simpl;reflexivity.
+  rewrite <- app_assoc.
+  simpl.
+  apply app_cons_ignore.
+  rewrite swap_rec_fst_len.
+  rewrite swap_rec_fst_len.
+  replace (min (length (Lhd ++ Ltl) - n) m) with m.
+  replace (min (length Lhd - n) m) with m.
   reflexivity.
-  simpl; auto.
-  simpl; auto.
-  simpl; auto.
-  simpl; auto.
-  simpl; auto.
-  simpl; auto.
+  symmetry.
+  apply Min.min_r.
+  apply NPeano.Nat.le_add_le_sub_r.
+  rewrite plus_comm.
+  exact H.
+  symmetry.
+  apply Min.min_r.
+  apply NPeano.Nat.le_add_le_sub_r.
+  rewrite app_length.
+  apply le_plus_trans.
+  rewrite plus_comm.
+  exact H.
+  unfold swap in IHLhd.
+  rewrite app_assoc.
+  apply (IHLhd Ltl n m).
+  exact H.
+Qed.
+
+Lemma swap_app: 
+  forall A:Type, forall L1 L2:list A, 
+    swap A (L1 ++ L2) (length L1) (length L2) = (L2 ++ L1).
+Proof.
+  intros A L1 L2.
+  rewrite swap_equiv.
+  unfold swap_alt.
+  rewrite skipn_app.
+  rewrite firstn_id.
+  rewrite app_assoc.
+  rewrite firstn_length_app.
+  rewrite<- app_length.
+  rewrite<- (app_nil_r (L1 ++ L2)) at 2. 
+  rewrite skipn_app.
+  rewrite app_nil_r.
+  reflexivity.
+Qed.
+
+Lemma swap_length:
+  forall A:Type, forall L: list A, forall n m:nat,
+    length L = length (swap A L n m).
+Proof.
+  intros A L.
+  induction L.
+  simpl; reflexivity.
+  simpl.
+  unfold swap.
+  simpl.
+  induction n.
+  induction m.
+  simpl; reflexivity.
+  simpl.
+  apply eq_S.
+  apply IHL.
+  simpl.
+  intro m.
+  rewrite app_length.
+  unfold length at 3.
+  rewrite NPeano.Nat.add_succ_r.
+  f_equal.
+  rewrite<- app_length.
+  apply IHL.
+Qed.
+
+(** ** Weigh *)
+
+(** Sum up the weights of a set of coins. *)
+Definition coin_sum (cs : coins) : nat := ListSet.set_fold_right plus (List.map coin_weight cs) 0.
+
+Hint Unfold coin_sum set_fold_right.
+
+Lemma sum_cons:
+  forall L:coins, forall a:coin, coin_sum (a::L) = (coin_weight a) + (coin_sum L).
+Proof.
   auto.
-  simpl;auto.
-  simpl;auto.
-  simpl;auto.
-  simpl;auto.
-  simpl;auto.
 Qed.
 
 Lemma exactlyn_sum: 
@@ -1214,6 +669,282 @@ Proof.
   reflexivity.
 Qed.
 
+(** Pick the first n elements of the list *)
+Fixpoint pick_rec (A:Type) (n:nat) (L : list A) : (list A * list A) :=
+   match L,n with
+   | nil,_ => (nil,nil)
+   | _,0 => (nil,L)
+   | car::cdr,(S n) => 
+       (fun p => ((car :: (fst p)), snd p)) (pick_rec A n cdr)
+end.
+
+Definition weigh (n:nat) (L : coins) :=
+    let (a,rest) := pick_rec coin n L in
+    let (b,rest2) := pick_rec coin n rest in
+    nat_compare (coin_sum a) (coin_sum b)
+.
+
+Lemma fst_pick_rec: 
+  forall A:Type, forall L : list A, forall n:nat,
+    length L = n -> fst(pick_rec A n L) = L.
+Proof.
+  intros A L.
+  induction L.
+  intros n Hlen.
+  simpl in Hlen.
+  rewrite <- Hlen.
+  simpl.
+  reflexivity.
+  intro n.
+  intro Hlen.
+  simpl in Hlen.
+  rewrite<- Hlen.
+  simpl.
+  f_equal.
+  apply IHL.
+  reflexivity.
+Qed.
+
+Lemma fst_pick_rec_tl:
+  forall A:Type, forall n:nat, forall Lhd Ltl : list A, 
+    (n <= length Lhd) -> fst(pick_rec A n Lhd) = fst (pick_rec A n (Lhd ++ Ltl)).
+Proof.
+  intro A.
+  induction n.
+  intro Lhd.
+  simpl.
+  destruct Lhd, Ltl.
+  auto.
+  auto.
+  auto.
+  auto.
+  simpl.
+  destruct Lhd.
+  simpl.
+  intros Ltl H.
+  apply NPeano.Nat.nle_succ_0 in H.
+  contradiction.
+  simpl.
+  intro Ltl.
+  intro H.
+  apply le_S_n in H.
+  f_equal.
+  apply IHn.
+  exact H.
+Qed.
+
+Lemma fst_pick_rec_app:
+  forall A:Type, forall n:nat, forall L1 L2: list A,
+    (length L1) = n -> fst(pick_rec A n (L1++L2)) = L1.
+Proof.
+  intros A n L1 L2 Hlen.
+  rewrite<- fst_pick_rec_tl.
+  rewrite fst_pick_rec.
+  reflexivity.
+  exact Hlen.
+  rewrite Hlen.
+  apply le_n.
+Qed.
+
+Lemma snd_pick_rec: 
+  forall A:Type, forall L1 L2 : list A, forall n:nat,
+    (length L1) = n -> (snd (pick_rec A n (L1 ++ L2))) = L2.
+Proof.
+  intros A L1.
+  induction L1.
+  intros L2 n Hlen.
+  simpl in Hlen.
+  rewrite <- Hlen.
+  simpl.
+  destruct L2.
+  simpl; reflexivity.
+  simpl; reflexivity.
+  intros L2 n Hlen.
+  simpl in Hlen.
+  rewrite <- Hlen.
+  simpl.
+  apply IHL1.
+  reflexivity.
+Qed.
+
+Lemma snd_pick_rec_tl:
+  forall A:Type, forall n:nat, forall Lhd Ltl : list A, 
+    (n <= length Lhd) -> snd(pick_rec A n Lhd)++Ltl = snd (pick_rec A n (Lhd ++ Ltl)).
+Proof.
+  intros A n.
+  induction n.
+  destruct Lhd.
+  simpl.
+  destruct Ltl.
+  auto.
+  auto.
+  simpl.
+  reflexivity.
+  intros Lhd Ltl H.
+  destruct Lhd.
+  simpl.
+  destruct Ltl.
+  auto.
+  simpl.
+  simpl in H.
+  apply NPeano.Nat.nle_succ_0 in H.
+  contradiction.
+  simpl.
+  apply IHn.
+  simpl in H.
+  apply le_S_n in H.
+  exact H.
+Qed.
+
+Lemma snd_pick_rec_length:
+  forall A:Type, forall n:nat, forall L: list A, 
+    (length (snd (pick_rec A n L))) = (length L) - n.
+Proof.
+  intros A n.
+  induction n.
+  simpl.
+  destruct L.
+  auto.
+  simpl.
+  auto.
+  simpl.
+  destruct L.
+  auto.
+  simpl.
+  apply IHn.
+Qed.
+
+Lemma weigh_tl:
+  forall n:nat, forall Lhd Ltl: coins,
+    (n+n <= length Lhd) -> weigh n Lhd = weigh n (Lhd ++ Ltl).
+Proof.
+  induction n.
+  simpl.
+  unfold weigh.
+  simpl.
+  destruct Lhd.
+  simpl.
+  destruct Ltl.
+  auto.
+  auto.
+  auto.
+  intros Lhd Ltl Hlen.
+  unfold weigh.
+  rewrite (surjective_pairing (pick_rec coin (S n) Lhd) ).
+  rewrite (surjective_pairing (pick_rec coin (S n) (Lhd++Ltl))).
+  rewrite (surjective_pairing _).
+  rewrite (surjective_pairing (pick_rec coin (S n) (snd (pick_rec coin (S n) (Lhd ++ Ltl))))).
+  rewrite <- fst_pick_rec_tl.
+  rewrite <- snd_pick_rec_tl.
+  rewrite <- fst_pick_rec_tl.
+  reflexivity.
+  simpl.
+  destruct Lhd.
+  simpl.
+  simpl in Hlen.
+  apply NPeano.Nat.nle_succ_0 in Hlen.
+  contradiction.
+  simpl.
+  rewrite snd_pick_rec_length.
+  apply  NPeano.Nat.le_add_le_sub_r.
+  simpl in Hlen.
+  apply le_S_n in Hlen.
+  replace (S n + n) with (n + S n).
+  exact Hlen.
+  rewrite plus_comm at 1.
+  reflexivity.
+  apply (NPeano.Nat.le_le_add_le 0 (S n)).
+  apply le_0_n.
+  rewrite <- plus_n_O.
+  exact Hlen.
+  apply (NPeano.Nat.le_le_add_le 0 (S n)).
+  apply le_0_n.
+  rewrite <- plus_n_O.
+  exact Hlen.
+Qed.  
+
+Lemma weigh_split: 
+  forall n:nat, forall a:coin, forall L1 L2 :coins,
+    length L1 = n -> length L2 = n  -> weigh (S n) (a::L1 ++ (a::L2)) = weigh n (L1 ++ L2).
+Proof.
+  intro n.
+  induction n.
+  intros a L1 L2 Hlen1 Hlen2.
+  apply list_length0 in Hlen1.
+  apply list_length0 in Hlen2.
+  rewrite Hlen1; rewrite Hlen2.
+  simpl.
+  unfold weigh.
+  unfold pick_rec.
+  simpl.
+  apply nat_compare_eq_iff.
+  reflexivity.
+  intros a L1 L2.
+  destruct L1.
+  intro Hlen1.
+  simpl in Hlen1.
+  symmetry in Hlen1.
+  apply NPeano.Nat.neq_succ_0 in Hlen1.
+  contradiction.
+  destruct L2.
+  intros Hlen1 Hlen2.
+  symmetry in Hlen2.
+  simpl in Hlen2.
+  apply NPeano.Nat.neq_succ_0 in Hlen2.
+  contradiction.
+  intro Hlen1; simpl in Hlen1.
+  intro Hlen2; simpl in Hlen2.
+  unfold weigh in IHn.
+  specialize (IHn a L1 L2).
+  rewrite (surjective_pairing (pick_rec coin (S n) (a :: L1 ++ a :: L2))) in IHn.
+  rewrite app_comm_cons in IHn.
+  rewrite snd_pick_rec in IHn.
+  rewrite fst_pick_rec_app in IHn.
+  rewrite (surjective_pairing (pick_rec coin (S n) _ )) in IHn.
+  rewrite fst_pick_rec in IHn.
+  apply eq_add_S in Hlen1.
+  apply eq_add_S in Hlen2.
+  specialize (IHn Hlen1 Hlen2).
+  rewrite (surjective_pairing (pick_rec coin n (L1 ++ L2))) in IHn.
+  rewrite fst_pick_rec_app in IHn.
+  rewrite (surjective_pairing (pick_rec coin n _)) in IHn.
+  rewrite snd_pick_rec in IHn.
+  rewrite fst_pick_rec in IHn.
+  unfold weigh.
+  rewrite (surjective_pairing (pick_rec coin (S (S n)) (a::(c :: L1) ++ a::c0::L2))).
+  rewrite app_comm_cons.
+  rewrite snd_pick_rec.
+  rewrite fst_pick_rec_app.
+  rewrite (surjective_pairing (pick_rec coin (S (S n)) _)).
+  rewrite fst_pick_rec.
+  rewrite (surjective_pairing (pick_rec coin (S n) _)).
+  rewrite snd_pick_rec.
+  rewrite fst_pick_rec_app.
+  rewrite (surjective_pairing (pick_rec _ (S n) _)).
+  rewrite fst_pick_rec.
+  rewrite sum_cons.
+  rewrite sum_cons.
+  rewrite sum_cons; rewrite sum_cons.
+  rewrite plus_assoc.
+  rewrite plus_assoc.
+  rewrite <-  plus_assoc.
+  rewrite <- plus_assoc.
+  rewrite nat_compare_plus.
+  reflexivity.
+  simpl; auto.
+  simpl; auto.
+  simpl; auto.
+  simpl; auto.
+  simpl; auto.
+  simpl; auto.
+  auto.
+  simpl;auto.
+  simpl;auto.
+  simpl;auto.
+  simpl;auto.
+  simpl;auto.
+Qed.
+
 Lemma weigh_defn : 
   forall n:nat, forall L1 L2 : coins, 
     length L1 = n -> 
@@ -1267,8 +998,306 @@ Proof.
   exact H.
 Qed.
  
-(* If we are even more ambitious we can also prove that p12 works as expected. *)
-Lemma p12Works:
+(** ** Evaluation *)
+
+(* Evaluate a weighing procedure. Given a set of coins this returns a
+reordered set. Consider this procedure a solution if the fake coin is at the
+head of the list. *) 
+
+Fixpoint procEval (p: proc) (g: coins) : coins := match p with
+| Stop => g
+| Swap n m p => (procEval p (swap coin g n m))
+| Weigh n plt peq pgt => 
+  (match weigh n g with
+  | Lt => (procEval plt g)
+  | Eq => (procEval peq g)
+  | Gt => (procEval pgt g)
+  end)
+end.
+
+(** * Properties of Procedures *)
+
+(** Count the number of uses of a scale in a procedure. *)
+Fixpoint procCost (p:proc) : nat :=
+  match p with
+  | Stop => 0
+  | Swap _ _ p => procCost p
+  | Weigh _  p1 p2 p3 => 1 + max (procCost p1) (max (procCost p2) (procCost p3))
+  end.
+
+(** Maximum size stack this procedure can observe. *)
+Fixpoint procDepth (p:proc) : nat :=
+  (match p with 
+  | Stop => 0
+  | Swap n m p => max (n+m) (procDepth p)
+  | Weigh n p1 p2 p3 => max (n + n) (max (max (procDepth p1) (procDepth p2)) (procDepth p3))
+  end).
+
+Lemma procDepth_tl:
+  forall p:proc, forall Lhd Ltl : coins,   
+    ((procDepth p) <= (length Lhd)) -> (procEval p (Lhd++Ltl)) = (procEval p Lhd) ++ Ltl.
+Proof.
+  intro p.
+  induction p.
+  simpl; reflexivity.
+  intros Lhd Ltl.
+  unfold procDepth.
+  fold procDepth.
+  intro Hlen.
+  unfold procEval.
+  fold procEval.
+  rewrite swap_tl.
+  apply IHp.
+  apply Max.max_lub_r in Hlen.
+  rewrite <- swap_length.
+  exact Hlen.
+  apply Max.max_lub_l in Hlen.
+  exact Hlen.
+  unfold procDepth.
+  fold procDepth.
+  intros Lhd Ltl Hlen.
+  unfold procEval.
+  fold procEval.
+  rewrite IHp1.
+  rewrite IHp2.
+  rewrite IHp3.
+  rewrite<- weigh_tl.
+  destruct (weigh n Lhd).
+  reflexivity.
+  reflexivity.
+  reflexivity.
+  apply Max.max_lub_l in Hlen.
+  exact Hlen.
+  apply Max.max_lub_r in Hlen.
+  apply Max.max_lub_r in Hlen.
+  exact Hlen.
+  apply Max.max_lub_r in Hlen.
+  apply Max.max_lub_l in Hlen.
+  apply Max.max_lub_r in Hlen.
+  exact Hlen.
+  apply Max.max_lub_r in Hlen.
+  apply Max.max_lub_l in Hlen.
+  apply Max.max_lub_l in Hlen.
+  exact Hlen.
+Qed.
+
+(** * Correctness 
+
+For [[proc]] to be a valid encoding of the intended problem it is
+important that procedures cannot manufacture coins or otherwise
+cheat. To encode this correctness criteria establish that the output
+is always a permutation of the input.
+
+*)
+
+Hint Unfold swap swap_rec.
+Hint Resolve Permutation_cons Permutation_cons_app.
+
+Lemma swap_unfold_app:
+  forall L:coins, forall m:nat,
+    (fst (swap_rec coin L 0 m) ++ snd (swap_rec coin L 0 m)) = (swap coin L 0 m).
+Proof.
+  auto.
+Qed.
+
+Hint Rewrite swap_unfold_app.
+
+Lemma swap_permutation_app:
+  forall L:coins, forall a:coin, forall m k:nat,
+    Permutation L (swap coin L m k) -> Permutation (a::L) (swap coin (a::L) (S m) k).
+Proof.
+  intros L a m k H.
+  unfold swap; simpl; apply Permutation_cons_app; exact H.
+Qed.
+
+Hint Resolve swap_permutation_app.
+
+(** * Tactical Smash
+
+Smash is a primitive tactic inspired by Adam Chilpala's crush.  It
+doesn't always work, but when it does it can eliminate some very
+tedious proofs.
+
+*)
+
+Ltac smash := 
+  repeat 
+    (auto;simpl;
+     match goal with
+       | [ H : ?P |- ?P ] => (exact H)
+       | [ |- context [swap _ _ 0 _]] => (unfold swap; simpl; rewrite swap_unfold_app)
+       | [ |- exactlyn _ (gold :: _)] => apply exactlyn_gold
+       | [ H : forall x:nat, _ -> _, _:nat |- _] => apply H
+       | [ |- forall x:_, _ ] => intro x
+       | [ |- (exactlyn _ _) -> _ ] => inversion 1
+       | [ H : fake = ?X, H' : context[?X] |- _] => (rewrite<- H in H')
+       | [ H : (exactlyn _ _) |- _ ] => (inversion H)
+       | [ H : forall L:_, Permutation _ _ |- Permutation ?X1 (procEval _ ?X2) ] => 
+             (apply Permutation_trans with (l' := X2))  
+       | [ |- context [match ?X with | Lt => _ | Gt => _ | Eq => _ end] ] => (case X) 
+       | [ |- ?X1 :: _ = ?X1 :: _ ] => f_equal
+       | [ |- context [length (?X1 :: ?X2)] ] => 
+         (let H := fresh "H" in
+         assert (H : (length (X1 :: X2)) = S (length X2)); 
+         simpl; 
+         reflexivity;
+         rewrite H)
+      | [H : ?X1 = ?X2 |- ?X3 = ?X4 ] => rewrite H
+      | [ |- _ ++ ?X1 :: _ = _ ++ ?X1 :: _ ] => f_equal
+
+     end); 
+  auto
+.
+
+(** * Basic properties of [[procEval]] *)
+Lemma swap_permutes:
+  forall L:coins, forall k m:nat, Permutation L (swap coin L k m).
+Proof.
+  induction L; auto.
+  destruct k; auto.
+  destruct m; smash.
+Qed.
+
+Hint Resolve swap_permutes.
+
+
+Lemma procEval_permutes:
+  forall p:proc, forall L : coins, Permutation L  (procEval p L).
+Proof.
+  induction p.
+  smash.
+  smash.
+  smash.
+Qed.
+
+Lemma procEval_length:
+  forall p:proc, forall L:coins, (length L) = (length (procEval p L)).
+Proof.
+  intros p L.
+  apply Permutation_length.
+  apply procEval_permutes.
+Qed.
+
+Hint Rewrite procEval_length.
+
+(** * Example solution for 4 and 12 coins *)
+
+(* Given 4 coins where one is fake. Find the fake one. [[p4] encodes a
+solution to this problem. Proof below. *)
+
+Definition p4 : proc :=
+   (Weigh 1 
+       Stop 
+        (Swap 2 2 (Weigh 1 Stop Stop (Swap 1 1 Stop)))
+        (Swap 1 1 Stop)).
+
+Example p4Example1:
+  procEval p4 [gold;gold;fake;gold] = [fake;gold;gold;gold].
+Proof.
+  compute.
+  reflexivity.
+Qed.
+
+(** Given twelve coins where one is lighter, Find the lighter one.
+[[p12]] is a solution to this problem (proof below). *)
+Definition p12 : proc :=
+    (Weigh 4
+        p4
+         (Swap 8 4 p4)
+         (Swap 4 4 p4)).
+
+(** Examples used to test the proposed solution. *)
+Definition ex1 : coins := [gold;gold;gold;gold; gold;gold;gold;gold; gold;gold;gold;fake].
+Definition ex2 : coins := [gold;fake;gold;gold; gold;gold;gold;gold; gold;gold;gold;gold].
+Definition ex3 : coins := [gold;gold;gold;gold; gold;gold;fake;gold; gold;gold;gold;gold].
+
+
+(* Now verify that p12 behaves as expected. *)
+Eval cbv in (procEval p12 ex1).
+Eval cbv in (procEval p12 ex2).
+Eval cbv in (procEval p12 ex3).
+
+Eval simpl in (procCost p12).
+
+(** ** Proof that [[p4]] Works *)
+
+(* Now apply all of this hard earned knowledge to prove that [[p4]] works. *)
+Corollary p4_works:
+  forall L: coins,
+    (length L = 4)
+    -> (exactlyn 1 L)
+    -> ((hd gold (procEval p4 L)) = fake).
+Proof.
+  intro L.
+  intro Hlen.
+  intro Hone.
+  assert (length (procEval p4 L) = length L).
+  apply Permutation_length.
+  symmetry.
+  apply procEval_permutes.
+  rewrite Hlen in H.
+  induction L.
+  inversion Hone.
+  induction L.
+  inversion Hlen.
+  induction L; inversion Hlen.
+  induction L; inversion Hlen.
+  induction L.
+  unfold procEval; unfold p4.
+  unfold weigh.
+  unfold pick_rec.
+  simpl.
+  unfold coin_sum.
+  simpl.
+  clear IHL.
+  clear IHL0.
+  clear IHL1.
+  clear IHL2.
+  clear H1.
+  clear H2.
+  clear Hlen.
+  inversion Hone.
+  inversion H2.
+  simpl; reflexivity.
+  inversion H2.
+  simpl; reflexivity.
+  simpl.
+  inversion H6.
+  inversion H10.
+  simpl; reflexivity.
+  inversion H10.
+  simpl; reflexivity.
+  simpl.
+  rewrite H12.
+  rewrite <- H12 in H10.
+  inversion H10.
+  inversion H14.
+  clear IHL.
+  clear IHL0.
+  clear IHL1.
+  clear IHL2.
+  clear H1.
+  clear H2.
+  clear IHL3.
+  simpl in Hlen.
+  exfalso.
+  apply eq_add_S in Hlen.
+  apply eq_add_S in Hlen.
+  apply eq_add_S in Hlen.
+  apply eq_add_S in Hlen.
+  apply NPeano.Nat.neq_succ_0 in Hlen.
+  exact Hlen.
+Qed.
+
+(** ** Proof that [[p12]] works *)
+
+Lemma p12_depth:
+  procDepth p12 = 12.
+Proof.
+  auto.
+Qed.
+
+Lemma p12_works:
   forall ns :coins,
     (length ns = 12)
     -> (exactlyn 1 ns)
@@ -1341,7 +1370,7 @@ Proof.
   rewrite<- app_assoc.
   rewrite procDepth_tl.
   rewrite hd_app.
-  rewrite p4Works.
+  rewrite p4_works.
   reflexivity.
   exact H7.
   rewrite H14 in H6.
@@ -1364,7 +1393,7 @@ Proof.
   rewrite hd_app.
   rewrite procDepth_tl.
   rewrite hd_app.
-  rewrite p4Works.
+  rewrite p4_works.
   reflexivity.
   exact H9.
   rewrite H15 in H11.
@@ -1396,7 +1425,7 @@ Proof.
   rewrite (swap_app _ L8 L4).
   rewrite procDepth_tl.
   rewrite hd_app.
-  apply p4Works.
+  apply p4_works.
   exact H4len.
   exact H4.
   rewrite <- procEval_length.
@@ -1410,12 +1439,13 @@ Proof.
   apply le_refl.
 Qed.
 
-(** * Inversion.
+(** * Inverse execution of [[proc]].
 
-  In this section we define an evaluator that runs proc backwards.
-  The goal is to return every possible input that could produce the
-  given set of outputs.  This will be useful for arguing about optimal
-  solutions.
+  This sections defines an evaluator that runs [[proc]] backwards.  It
+  returns every possible input that could produce the given set of
+  outputs.
+
+  Inverse exeuction will be useful for arguing about optimal solutions.
 
 *)
 
@@ -1535,9 +1565,10 @@ Proof.
   exact H.
 Qed.
 
-(* Use swap_app and breakup for case where length is equal to m+n.
+(** Use swap_app and breakup for case where length is equal to m+n.
    Use swap_tl for case where longer.
-   Is not true if shorter but we don't care. *)
+   This fact is not true if shorter but we don't care. *)
+
 Lemma swapInv_len_eq: 
   forall A : Type, forall L : list A, forall n m : nat,
     (length L = (n+m)) -> swap A (swap A L n m) m n = L.
