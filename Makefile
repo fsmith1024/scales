@@ -2,12 +2,30 @@
 # Trivial Makefile for a trival project.
 #
 
-.PHONY: doc
+.PHONY: html clean all
+.DEFAULT_GOAL := all
 
-doc:
-	coqdoc -d ./doc --parse-comments Scales.v
-	coqdoc -d ./doc --parse-comments Elementary.v
+COQC?= coqc
+COQFLAGS?= 
+COQDOC?= coqdoc
+COQDOCFLAGS?= --parse-comments 
 
-all:
-	coqc Elementary.v
-	coqc Scales.v
+VFILES:= Elementary.v Scales.v
+VOFILES:= $(VFILES:.v=.vo)
+
+html: $(GLOBFILES) $(VFILES) 
+	- mkdir -p html
+	$(COQDOC) -toc $(COQDOCFLAGS) -html -d html $(VFILES)
+
+all: $(VOFILES)
+
+clean:
+	rm -f $(VOFILES) $(GLOBFILES)
+	- rm -rf html
+
+%.vo %.glob: %.v
+	$(COQC) $(COQFLAGS) $*
+
+%.html: %.v %.glob
+	$(COQDOC) $(COQDOCFLAGS) -html $< -o $@
+

@@ -316,7 +316,7 @@ Definition ex2 : coins := [gold;fake;gold;gold; gold;gold;gold;gold; gold;gold;g
 Definition ex3 : coins := [gold;gold;gold;gold; gold;gold;fake;gold; gold;gold;gold;gold].
 
 
-(* Now we verify that everything worka. *)
+(* Now verify that everything worka. *)
 Eval cbv in (procEval p12 ex1).
 Eval cbv in (procEval p12 ex2).
 Eval cbv in (procEval p12 ex3).
@@ -332,13 +332,6 @@ Proof.
 Qed.
 
 Hint Rewrite procEval_length.
-
-(* Hint Rewrite <- firstn_length_app. *)
-(* Hint Resolve hd_length. *)
-(* Hint Resolve tail_length. *)
-(* Hint Resolve length_app_eq_fst. *)
-(* Hint Resolve length_app_eq_snd. *)
-(* Hint Resolve app_cons_ignore. *)
 
 Lemma swap_rec_fst_len:
   forall A:Type, forall L:list A, forall n m:nat,
@@ -1051,8 +1044,8 @@ Proof.
   intro n.
   induction n.
   intros a L1 L2 Hlen1 Hlen2.
-  apply length_0 in Hlen1.
-  apply length_0 in Hlen2.
+  apply list_length0 in Hlen1.
+  apply list_length0 in Hlen2.
   rewrite Hlen1; rewrite Hlen2.
   simpl.
   unfold weigh.
@@ -1994,158 +1987,6 @@ Definition procWorks (p:proc) :=
     (exactlyn 1 L) -> 
     ((hd gold (procEval p L)) = fake).
 
-Lemma length_cons: 
-  forall A:Type, forall L:list A, forall n:nat,
-    (length L) = (S n) -> exists a:A, exists L1: list A, L = (a::L1).
-Proof.
-  intros A L.
-  induction L.
-  simpl.
-  intros n H.
-  symmetry in H.
-  apply Nat.neq_succ_0 in H.
-  contradiction.
-  intros n Hlen.
-  exists a.
-  exists L.
-  reflexivity.
-Qed.
-
-Lemma list_split_length:
-  forall A:Type, forall L1 L2 : list A, forall a:A,
-    length (L1 ++ a::L2) = S (length (L1 ++ L2)).
-Proof.
-  intros A L1 L2 a.
-  rewrite app_length.
-  rewrite app_length.
-  simpl.
-  rewrite plus_n_Sm.  
-  reflexivity.
-Qed.
-
-Lemma In_split:
-  forall A:Type, forall L1 L2:list A, forall b: A,
-    In b (L1 ++ L2) -> (forall a:A, In b (L1 ++ (a::L2))).
-Proof.
-  intros A L1 L2 b H a.
-  apply in_or_app.
-  apply in_app_or in H.
-  decompose [or] H.
-  left; exact H0.
-  right.
-  apply in_cons.
-  exact H0.
-Qed.
-
-Lemma In_remove: 
-  forall A:Type, forall L1 L2 : list A, forall a b : A,
-    a<>b -> In b (L1 ++ a::L2) -> In b (L1 ++ L2).
-Proof.
-  intros A L1 L2 a b Hne Hin.
-  apply in_app_or in Hin.
-  decompose [or] Hin.
-  apply in_or_app; left.
-  exact H.
-  apply in_inv in H.
-  decompose [or] H.
-  elim (Hne H0).
-  apply in_or_app; right.
-  exact H0.
-Qed.
-
-Lemma NoDup_cons_inv:
-  forall A:Type, forall L:list A, forall a:A,
-    NoDup (a::L) -> NoDup L.
-Proof.
-  intros A L a H.
-  inversion H.
-  exact H3.
-Qed.
-
-Lemma NoDup_remove_cons:
-  forall A:Type, forall L: list A, forall a : A,
-    NoDup (a::L) -> ~ (In a L).
-Proof.
-  intros A L a H.
-  replace (a::L) with ([] ++ (a::L)) in H.
-  apply NoDup_remove_2 in H.
-  simpl in H.
-  exact H.
-  simpl; reflexivity.
-Qed.
-
-Lemma list_cardinality:
-  forall A:Type, forall L1 L2 : list A,
-    ((forall a:A, In a L1 <-> In a L2) /\ NoDup L1 /\ NoDup L2) 
-    -> (length L1 = length L2).
-Proof.
-  intro A.
-  induction L1.
-  intros L2 Hand.
-  decompose [and] Hand.
-  destruct L2.
-  reflexivity.
-  absurd (In a []).
-  auto.
-  apply H.
-  apply in_eq.
-  intros L2 Hand.
-  decompose [and] Hand.
-  assert (Hin: In a L2).
-  apply H.
-  apply in_eq.
-  apply in_split in Hin.
-  elim Hin.
-  intros L21 Hin2.
-  elim Hin2; intros L22 Hsplit.
-  rewrite Hsplit.
-  rewrite list_split_length.
-  simpl.
-  f_equal.
-  apply IHL1.
-  apply conj.
-  intros b.
-  apply conj.
-  decompose [and] Hand.
-  intro HinL1.
-  assert (HInL1_dup : In b L1).
-  exact HinL1.
-  apply (in_cons a) in HinL1.
-  apply H0 in HinL1.
-  rewrite Hsplit in HinL1.
-  apply (In_remove A L21 L22 a b).
-  apply NoDup_remove_cons in H4.
-  intro Hne.
-  rewrite Hne in H4.
-  absurd (In b L1).
-  exact H4.
-  exact HInL1_dup.
-  exact HinL1.
-  intro Hb.
-  assert (Hb2 : In b L2).
-  rewrite Hsplit.
-  apply In_split.
-  exact Hb.
-  remember Hb2 as Hb2'.
-  clear HeqHb2'.
-  apply H in Hb2.
-  apply in_inv in Hb2.
-  decompose [or] Hb2.
- rewrite Hsplit in Hb2'.
- rewrite Hsplit in H2.
- apply NoDup_remove_2 in H2.
- rewrite H0 in H2.
- absurd (In b (L21 ++ L22)).
- exact H2.
- exact Hb.
- exact H0.
- apply conj.
- apply NoDup_cons_inv in H1.
- exact H1.
- rewrite Hsplit in H2.
- apply NoDup_remove_1 in H2.
- exact H2.
-Qed.
 
 Definition cardinality_witness (A:Type) (P: A -> Prop) (L : list A) :=
  (forall a:A, P a <-> In a L) /\ NoDup L.
@@ -2217,7 +2058,7 @@ Proof.
   intro a.
   apply conj.
   intro H.
-  apply length_0 in H.
+  apply list_length0 in H.
   rewrite H.
   simpl.
   left.
@@ -2954,13 +2795,13 @@ Proof.
   rewrite<- H4 in H0.
   simpl in H0.
   apply eq_add_S in H0.
-  apply length_0 in H0.
+  apply list_length0 in H0.
   rewrite H0.
   reflexivity.
   rewrite<- H4 in H0.
   simpl in H0.
   apply eq_add_S in H0.
-  apply length_0 in H0.
+  apply list_length0 in H0.
   rewrite H0 in H2.
   inversion H2.
   smash.
@@ -3043,7 +2884,7 @@ Proof.
   apply conj.
   intro H.
   decompose [and] H.
-  apply length_0 in H0.
+  apply list_length0 in H0.
   rewrite H0 in H1.
   apply exactlyn_nil in H1.
   lia.
@@ -3146,7 +2987,7 @@ Proof.
   simpl.
   intros L2 Hlen Hex1 Hex2.
   symmetry in Hlen.
-  apply length_0 in Hlen.
+  apply list_length0 in Hlen.
   rewrite Hlen.
   reflexivity.
   destruct L2.
@@ -3173,7 +3014,7 @@ Proof.
   intros L2 Hlen.
   simpl in Hlen.
   symmetry in Hlen.
-  apply length_0 in Hlen.
+  apply list_length0 in Hlen.
   rewrite Hlen.
   auto.
   destruct L2.
@@ -3660,29 +3501,6 @@ Proof.
   decompose [or] H.
   lia.
   lia.
-Qed.
-
-Lemma list_split: 
-  forall A:Type, 
-  forall L: list A,
-  forall n1 n2:nat,
-    length L = n1 + n2 ->
-    exists L1 L2 : list A,
-      length L1 = n1 /\ length L2 = n2 /\ L = L1 ++ L2.
-Proof.
-  intros A L n1 n2 Hlen.
-  exists (firstn n1 L).
-  exists (skipn n1 L).
-  apply conj.
-  rewrite List.firstn_length.
-  rewrite Hlen.
-  lia.
-  apply conj.
-  rewrite skipn_length.
-  rewrite Hlen.
-  lia.
-  rewrite (firstn_skipn n1).
-  reflexivity.
 Qed.
 
 Lemma pnWorks_helper:
@@ -4185,32 +4003,6 @@ Proof.
   exact Hw.
 Qed.
                                                                
-Lemma mul_div_mod_lt:
-  forall n z k,
-    z>1 -> n >= z -> k <= n mod z -> (n/z + k) < n.
-Proof.
-  intros n z k Hz Hn Hk.
-  assert (H1 : n/z + k <= n/z + n mod z).
-  lia.
-  apply (le_lt_trans _ (n/z + n mod z)).
-  exact H1.
-  apply (lt_le_trans _ ((z-1)*(n/z) + (n/z + n mod z)) _).
-  apply Nat.lt_add_pos_l.
-  apply Nat.mul_pos_pos.
-  lia.
-  apply Nat.div_str_pos.
-  lia.
-  
-  rewrite plus_assoc.
-  rewrite<- mult_succ_l.
-  rewrite<- Nat.add_1_r.
-  rewrite Nat.sub_add.
-  rewrite<- div_mod.
-  lia.
-  lia.
-  lia.
-Qed.
-
 Function pn2 (n:nat) {measure (fun x => n ) n } :=
   match n with
     | 0 => Stop
@@ -4315,13 +4107,6 @@ Proof.
   lia.
 Defined.
 
-Lemma plus_eq_self_r:
-  forall m n:nat, n + m = m -> n = 0.
-Proof.
-  intros m n H.
-  lia.
-Qed.
-
 Lemma pn2_depth:
   forall n:nat, procDepth (pn2 n) = n.
 Proof.
@@ -4393,160 +4178,6 @@ Proof.
   exact IHp.
   exact IHp0.
 Qed.
-
-
-Lemma mod_div_nostep:
-  forall a b : nat,
-    b<>0 -> (S a) mod b > 0 -> (((S a) / b) = a/b).
-Proof.
-  intros a b Hb Hmod.
-  rewrite (div_mod a b Hb) at 1.
-  rewrite<- Nat.add_1_r.
-  rewrite<- plus_assoc.
-  rewrite mult_comm at 1.
-  rewrite (Nat.div_add_l _ _ _ Hb).
-  rewrite<- (plus_0_r (a / b)) at 2.
-  apply Nat.add_cancel_l.
-  apply Nat.div_small.
-  assert(H: a mod b < (b-1) \/ a mod b = b-1).
-  assert (H2 := Nat.mod_upper_bound a b Hb).
-  lia.
-  destruct H as [Hlt | Heq].
-  lia.
-
-  assert (Hbgt1: b > 1).
-  destruct b.
-  lia.
-  destruct b.
-  simpl in Hmod.
-  lia.
-  lia.
-  
-  rewrite<- Nat.add_1_r in Hmod.
-  rewrite (Nat.add_mod _ _ _ Hb) in Hmod.
-  rewrite Heq in Hmod.
-  rewrite (Nat.mod_1_l _ Hbgt1) in Hmod.
-  replace (b - 1 + 1) with b in Hmod.
-
-  rewrite Nat.mod_same in Hmod.
-  lia.
-  exact Hb.
-  lia.
-Qed.
-
-Lemma mod_div_step:
-  forall a b:nat,
-    b<>0 -> (S a) mod b = 0 -> ((S a)/b = a/b + 1).
-Proof.
-  intros a b Hb Hmod.
-
-  assert (Hmod' := Hmod).
-
-  assert(Hcases: b = 1 \/ b>1).
-  lia.
-  destruct Hcases as [H1 | Hgt1].
-  rewrite H1.
-  rewrite Nat.div_1_r.
-  rewrite Nat.div_1_r.
-  lia.
-
-  rewrite<- Nat.add_1_r in Hmod.
-  rewrite Nat.add_mod in Hmod.
-  rewrite (Nat.mod_1_l b Hgt1) in Hmod.
-  
-  assert (Hbound : a mod b + 1 < b +1).
-  apply plus_lt_compat_r.
-  apply Nat.mod_bound_pos.
-  lia.
-  lia.
-
-  assert (Hcases: a mod b + 1 = b \/ a mod b + 1 < b).
-  lia.
-
-  destruct Hcases as [Htrue | Hbogus].
-
-  
-  apply (Nat.mul_cancel_l _ _ b Hb).
-  rewrite mult_plus_distr_l.
-  rewrite mult_1_r.
-  rewrite<- Htrue at 5.
-  rewrite plus_assoc.
-  rewrite<- (div_mod _ b Hb).
-  rewrite (plus_n_O (b * (S a / b))).
-  rewrite<- Hmod' at 1.
-  rewrite<- (div_mod _ b Hb).
-  lia.
-
-  rewrite (Nat.mod_small _ _ Hbogus) in Hmod.
-  lia.
-  lia.
-Qed.
-
-Lemma mod_plus_compat:
-  forall a b n d : nat,
-    n <> 0 -> ((a mod n = b mod n) <-> ((a + d) mod n = (b + d) mod n)).
-Proof.
-  intros a b n d Hn.
-  apply conj.
-  
-  intros H.
-  rewrite<- (Nat.add_mod_idemp_l _ _ _ Hn) at 1.
-  rewrite H.
-  rewrite (Nat.add_mod_idemp_l _ _ _ Hn) at 1.
-  reflexivity.
-  
-  intros H.
-  induction d.
-  rewrite plus_0_r in H.
-  rewrite plus_0_r in H.
-  exact H.
-
-  apply IHd.
-  clear IHd.
-  
-  replace (a + S d) with ((a+d) + 1) in H.
-  replace (b + S d) with ((b+d) + 1) in H.
-
-  rewrite<- (Nat.add_mod_idemp_l (a+d) 1 n Hn) in H. 
-  rewrite<- (Nat.add_mod_idemp_l (b+d) 1 n Hn) in H.
-
-  assert (Had : (a + d) mod n + 1 < n \/ (a+d) mod n + 1 = n).
-  apply le_lt_or_eq.
-  assert (H' := (Nat.mod_upper_bound (a + d) n Hn)).
-  lia.
-
-  assert (Hbd : (b + d) mod n + 1 < n \/ (b+d) mod n + 1 = n).
-  apply le_lt_or_eq.
-  assert (H' := (Nat.mod_upper_bound (b + d) n Hn)).
-  lia.
-
-  remember ((b + d) mod n) as bd.
-  remember ((a + d) mod n) as ad.
-
-  destruct Had as [Hads | Hadn].
-  destruct Hbd as [Hbds | Hbdn].
-
-  rewrite (Nat.mod_small (ad + 1) n Hads) in H.
-  rewrite (Nat.mod_small (bd + 1) n Hbds) in H.
-  lia.
-
-  rewrite (Nat.mod_small (ad + 1) n Hads) in H.
-  rewrite Hbdn in H.
-  rewrite (Nat.mod_same n Hn) in  H.
-  lia.
-
-  destruct Hbd as [ Hbds | Hbdn ].
-  rewrite Hadn in H.
-  rewrite (Nat.mod_same n Hn) in H.
-  
-  rewrite (Nat.mod_small (bd + 1) n Hbds) in H.
-  lia.
-
-  lia.
-  lia.
-  lia.
-Qed.
-
 
 Lemma pn2_cost_monotonic_S: 
   forall n : nat, procCost (pn2 n) <= procCost (pn2 (S n)).
@@ -4785,7 +4416,7 @@ Proof.
   lia.
 Qed.
             
-Lemma pn2_ultimate:
+Lemma pn2_optimal:
   forall p:proc, procWorks p -> procCost (pn2 (procDepth p)) <= procCost p.
 Proof.
   intros p Hp.
@@ -4799,6 +4430,7 @@ Proof.
 Qed.
 
 End Scales.
+
 (* Local Variables: *)
 (* coq-prog-name: "/usr/local/bin/coqtop" *)
 (* coq-load-path: ("/Users/Fred/Documents/proofs/scales") *)
