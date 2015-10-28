@@ -222,6 +222,36 @@ Proof.
   exact H.
 Qed.
 
+Lemma max_eq_r:
+  forall n m p:nat,
+    n<=p -> m=p -> (Peano.max n m = p).
+Proof.
+  intros n m p Hnm Hmp.
+  rewrite Hmp.
+  apply Max.max_r.
+  exact Hnm.
+Qed.
+
+Lemma max_eq_l:
+  forall n m p:nat,
+    m <= p -> n = p -> (Peano.max n m = p).
+Proof.
+  intros n m p Hnm Hnp.
+  rewrite<- Hnp.
+  lia.
+Qed.
+
+Lemma max_plus:
+  forall n m: nat,
+    Peano.max (n+m) n = (n+m).
+Proof.
+  intros n m.
+  rewrite (plus_n_O n) at 2.
+  rewrite Max.plus_max_distr_l.
+  rewrite Max.max_0_r.
+  reflexivity.
+Qed.
+
 Lemma pow_max: 
   forall a n m:nat, 
     a<>0 -> a ^ (max n m) = (max (a ^ n) (a ^ m)).
@@ -1047,6 +1077,23 @@ Proof.
   exact H0.
 Qed.
 
+Lemma In_one: 
+  forall A:Type, forall a b:A, 
+    In a (b::nil) <-> b = a.
+Proof.
+  intros A a b.
+  apply conj.
+  intro H.
+  unfold In in H.
+  decompose [or] H.
+  exact H0.
+  contradiction.
+  intro H.
+  rewrite H.
+  apply in_eq.
+Qed.
+
+
 Lemma NoDup_cons_inv:
   forall A:Type, forall L:list A, forall a:A,
     NoDup (a::L) -> NoDup L.
@@ -1068,78 +1115,6 @@ Proof.
   simpl; reflexivity.
 Qed.
 
-Lemma list_cardinality:
-  forall A:Type, forall L1 L2 : list A,
-    ((forall a:A, In a L1 <-> In a L2) /\ NoDup L1 /\ NoDup L2) 
-    -> (length L1 = length L2).
-Proof.
-  intro A.
-  induction L1.
-  intros L2 Hand.
-  decompose [and] Hand.
-  destruct L2.
-  reflexivity.
-  absurd (In a []).
-  auto.
-  apply H.
-  apply in_eq.
-  intros L2 Hand.
-  decompose [and] Hand.
-  assert (Hin: In a L2).
-  apply H.
-  apply in_eq.
-  apply in_split in Hin.
-  elim Hin.
-  intros L21 Hin2.
-  elim Hin2; intros L22 Hsplit.
-  rewrite Hsplit.
-  rewrite list_split_length.
-  simpl.
-  f_equal.
-  apply IHL1.
-  apply conj.
-  intros b.
-  apply conj.
-  decompose [and] Hand.
-  intro HinL1.
-  assert (HInL1_dup : In b L1).
-  exact HinL1.
-  apply (in_cons a) in HinL1.
-  apply H0 in HinL1.
-  rewrite Hsplit in HinL1.
-  apply (In_remove A L21 L22 a b).
-  apply NoDup_remove_cons in H4.
-  intro Hne.
-  rewrite Hne in H4.
-  absurd (In b L1).
-  exact H4.
-  exact HInL1_dup.
-  exact HinL1.
-  intro Hb.
-  assert (Hb2 : In b L2).
-  rewrite Hsplit.
-  apply In_split.
-  exact Hb.
-  remember Hb2 as Hb2'.
-  clear HeqHb2'.
-  apply H in Hb2.
-  apply in_inv in Hb2.
-  decompose [or] Hb2.
-  rewrite Hsplit in Hb2'.
-  rewrite Hsplit in H2.
-  apply NoDup_remove_2 in H2.
-  rewrite H0 in H2.
-  absurd (In b (L21 ++ L22)).
-  exact H2.
-  exact Hb.
-  exact H0.
-  apply conj.
-  apply NoDup_cons_inv in H1.
-  exact H1.
-  rewrite Hsplit in H2.
-  apply NoDup_remove_1 in H2.
-  exact H2.
-Qed.
 
 
 (* Local Variables: *)

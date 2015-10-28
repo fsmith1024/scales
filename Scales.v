@@ -15,7 +15,6 @@ them.  For example, you may or may not know that the fake is lighter
 or heavier than the real coins.
 *)
 
-
 Require Import Arith.
 Require Import Bool.
 Require Import Coq.Numbers.Natural.Peano.NPeano.
@@ -27,6 +26,7 @@ Require Import Psatz.
 Import ListNotations.
 
 Require Import Elementary.
+Require Import Cardinality.
 
 (** * Encoding sets of coins
 
@@ -561,6 +561,107 @@ Proof.
   apply IHL.
 Qed.
 
+Hint Unfold swap swap_rec.
+Hint Resolve Permutation_cons Permutation_cons_app.
+
+Lemma swap_unfold_app:
+  forall L:coins, forall m:nat,
+    (fst (swap_rec coin L 0 m) ++ snd (swap_rec coin L 0 m)) = (swap coin L 0 m).
+Proof.
+  auto.
+Qed.
+
+Hint Rewrite swap_unfold_app.
+
+Lemma swap_permutation_app:
+  forall L:coins, forall a:coin, forall m k:nat,
+    Permutation L (swap coin L m k) -> Permutation (a::L) (swap coin (a::L) (S m) k).
+Proof.
+  intros L a m k H.
+  unfold swap; simpl; apply Permutation_cons_app; exact H.
+Qed.
+
+Hint Resolve swap_permutation_app.
+
+Lemma swap_permutes:
+  forall L:coins, forall k m:nat, Permutation L (swap coin L k m).
+Proof.
+  induction L; auto.
+  destruct k; auto.
+  destruct m; auto.
+  unfold swap; simpl; rewrite swap_unfold_app.
+  mini_smash.
+Qed.
+
+Hint Resolve swap_permutes.
+
+Lemma swap_swap_length_eq: 
+  forall A : Type, forall L : list A, forall n m : nat,
+    (length L = (n+m)) -> swap A (swap A L n m) m n = L.
+Proof.
+  intros A L n m Hlen.
+  elim (breakup (length L) n m Hlen A L).
+  intros Ln HLm.
+  elim HLm.
+  intros Lm Hnm.
+  decompose [and] Hnm.
+  rewrite H.
+  rewrite<- H1.
+  rewrite<- H2.
+  rewrite swap_app.
+  rewrite swap_app.
+  f_equal.
+  reflexivity.
+Qed.
+
+(** Use swap_app and breakup for case where length is equal to m+n.
+   Use swap_tl for case where longer.
+   This fact is not true if shorter but we don't care. *)
+Lemma swap_swap_length_geq: 
+  forall A : Type, forall L : list A, forall n m : nat,
+    (length L >= (n+m)) -> swap A (swap A L n m) m n = L.
+Proof.
+  intros A L n m Hlen.
+  elim (NPeano.Nat.le_exists_sub (n+m)(length L)).
+  intros p Hp.
+  decompose [and] Hp.
+  rewrite plus_comm in H.
+  elim (breakup (length L) (n + m) p H A L).
+  intros Lmn HLmn.
+  elim HLmn.
+  intros Lp HLp.
+  decompose [and] HLp.
+  rewrite H1.
+  rewrite swap_tl.
+  rewrite swap_tl.
+  f_equal.
+  apply swap_swap_length_eq.
+  exact H3.
+  rewrite<- swap_length.
+  rewrite plus_comm.
+  erewrite H3.
+  reflexivity.
+  rewrite H3.
+  reflexivity.
+  reflexivity.
+  exact Hlen.
+Qed.
+
+Lemma swap_unique: 
+  forall A:Type, forall L1 L2 : list A, forall n m : nat,
+    (n+m) <= (min (length L1) (length L2)) 
+    -> (swap A L1 n m) = (swap A L2 n m)
+    -> L1 = L2.
+Proof.
+  intros A L1 L2 n m Hlen Heq.
+  apply Nat.min_glb_iff in Hlen.
+  decompose [and] Hlen.
+  rewrite<- (swap_swap_length_geq A L1 n m H).
+  rewrite<- (swap_swap_length_geq A L2 n m H0).
+  f_equal.
+  exact Heq.
+Qed.
+
 (** ** Weigh *)
 
 (** Sum up the weights of a set of coins. *)
@@ -1000,9 +1101,9 @@ Qed.
  
 (** ** Evaluation *)
 
-(* Evaluate a weighing procedure. Given a set of coins this returns a
-reordered set. Consider this procedure a solution if the fake coin is at the
-head of the list. *) 
+(* Evaluate a weighing procedure. Given a set of coins, returns a
+reordered set. This procedure is a solution if the fake coin is at the
+head of the list -- indicating that it has been "found". *) 
 
 Fixpoint procEval (p: proc) (g: coins) : coins := match p with
 | Stop => g
@@ -1081,37 +1182,6 @@ Proof.
   exact Hlen.
 Qed.
 
-(** * Correctness 
-
-For [[proc]] to be a valid encoding of the intended problem it is
-important that procedures cannot manufacture coins or otherwise
-cheat. To encode this correctness criteria establish that the output
-is always a permutation of the input.
-
-*)
-
-Hint Unfold swap swap_rec.
-Hint Resolve Permutation_cons Permutation_cons_app.
-
-Lemma swap_unfold_app:
-  forall L:coins, forall m:nat,
-    (fst (swap_rec coin L 0 m) ++ snd (swap_rec coin L 0 m)) = (swap coin L 0 m).
-Proof.
-  auto.
-Qed.
-
-Hint Rewrite swap_unfold_app.
-
-Lemma swap_permutation_app:
-  forall L:coins, forall a:coin, forall m k:nat,
-    Permutation L (swap coin L m k) -> Permutation (a::L) (swap coin (a::L) (S m) k).
-Proof.
-  intros L a m k H.
-  unfold swap; simpl; apply Permutation_cons_app; exact H.
-Qed.
-
-Hint Resolve swap_permutation_app.
-
 (** * Tactical Smash
 
 Smash is a primitive tactic inspired by Adam Chilpala's crush.  It
@@ -1146,20 +1216,18 @@ Ltac smash :=
       | [ |- _ ++ ?X1 :: _ = _ ++ ?X1 :: _ ] => f_equal
 
      end); 
-  auto
-.
+  auto.
 
-(** * Basic properties of [[procEval]] *)
-Lemma swap_permutes:
-  forall L:coins, forall k m:nat, Permutation L (swap coin L k m).
-Proof.
-  induction L; auto.
-  destruct k; auto.
-  destruct m; smash.
-Qed.
+(** * Correctness 
 
-Hint Resolve swap_permutes.
+For [[proc]] to be a valid encoding of the intended problem it is
+important that procedures cannot manufacture coins or otherwise
+cheat. To encode this correctness criteria establish that the output
+is always a permutation of the input.
 
+*)
+
+(** ** Basic properties of [[procEval]] *)
 
 Lemma procEval_permutes:
   forall p:proc, forall L : coins, Permutation L  (procEval p L).
@@ -1180,7 +1248,7 @@ Qed.
 
 Hint Rewrite procEval_length.
 
-(** * Example solution for 4 and 12 coins *)
+(** ** Example solution for 4 and 12 coins *)
 
 (* Given 4 coins where one is fake. Find the fake one. [[p4] encodes a
 solution to this problem. Proof below. *)
@@ -1441,8 +1509,8 @@ Qed.
 
 (** * Inverse execution of [[proc]].
 
-  This sections defines an evaluator that runs [[proc]] backwards.  It
-  returns every possible input that could produce the given set of
+  This sections defines an evaluator that runs [[proc]] in reverse.
+  It returns every possible input that could produce the given set of
   outputs.
 
   Inverse exeuction will be useful for arguing about optimal solutions.
@@ -1565,61 +1633,8 @@ Proof.
   exact H.
 Qed.
 
-(** Use swap_app and breakup for case where length is equal to m+n.
-   Use swap_tl for case where longer.
-   This fact is not true if shorter but we don't care. *)
-
-Lemma swapInv_len_eq: 
-  forall A : Type, forall L : list A, forall n m : nat,
-    (length L = (n+m)) -> swap A (swap A L n m) m n = L.
-Proof.
-  intros A L n m Hlen.
-  elim (breakup (length L) n m Hlen A L).
-  intros Ln HLm.
-  elim HLm.
-  intros Lm Hnm.
-  decompose [and] Hnm.
-  rewrite H.
-  rewrite<- H1.
-  rewrite<- H2.
-  rewrite swap_app.
-  rewrite swap_app.
-  f_equal.
-  reflexivity.
-Qed.
-
-Lemma swapInv_len_geq: 
-  forall A : Type, forall L : list A, forall n m : nat,
-    (length L >= (n+m)) -> swap A (swap A L n m) m n = L.
-Proof.
-  intros A L n m Hlen.
-  elim (NPeano.Nat.le_exists_sub (n+m)(length L)).
-  intros p Hp.
-  decompose [and] Hp.
-  rewrite plus_comm in H.
-  elim (breakup (length L) (n + m) p H A L).
-  intros Lmn HLmn.
-  elim HLmn.
-  intros Lp HLp.
-  decompose [and] HLp.
-  rewrite H1.
-  rewrite swap_tl.
-  rewrite swap_tl.
-  f_equal.
-  apply swapInv_len_eq.
-  exact H3.
-  rewrite<- swap_length.
-  rewrite plus_comm.
-  erewrite H3.
-  reflexivity.
-  rewrite H3.
-  reflexivity.
-  reflexivity.
-  exact Hlen.
-Qed.
-
-(* First we show that procEvalInv contains all possible inputs. We
-call this property being full. *)
+(** First show that procEvalInv contains all possible inputs. Call
+this property being full. *)
 
 Lemma procEvalInv_is_full :
   forall p:proc,forall g:coins, 
@@ -1640,7 +1655,7 @@ Proof.
   fold procEvalInv.
   apply in_map_iff.
   exists (swap coin g n n0).
-  rewrite swapInv_len_geq.
+  rewrite swap_swap_length_geq.
   apply conj.
   reflexivity.
   apply IHp.
@@ -1751,7 +1766,7 @@ Proof.
   exact H1.
 Qed.
 
-(* Now we directly show that procEvalInv is an inverse.  *)
+(** Show that procEvalInv is an inverse.  *)
 Lemma procEvalInv_is_inverse : 
   forall p:proc, forall g gInv:coins,
     (procDepth p <= length g) ->
@@ -1779,7 +1794,7 @@ Proof.
   intro Hand.
   decompose [and] Hand.
   rewrite<- H.
-  rewrite swapInv_len_geq.
+  rewrite swap_swap_length_geq.
   exact H0.
   apply Max.max_lub_l in Hlen.
   apply procEvalInv_length in H0.
@@ -1841,12 +1856,12 @@ Proof.
   exact Hlen.
 Qed.
 
-(* We have established that procEvalInv is a real inverse function.
+(** The proof establishes that procEvalInv is a real inverse function.
 Now it remains to show that the output of procEvalInv has no
 duplicates, and to bound the number of elements in the output of
 procEvalInv. *)
 
-(* This lemma shows that the inverse function produces less than 3 *
+(** This lemma shows that the inverse function produces less than 3 *
 (the number of uses of the scale). For a procedure to work, it must
 produce every possible input from the one correct output. *)
 
@@ -1893,24 +1908,9 @@ Proof.
   apply Nat.neq_succ_0.
 Qed.
 
-(* We would like to show that the output is a set of values.
-Eventually we want to use a cardinality argument to place a bound on
-the number of weighings that are needed. If we prove there are no
-duplicates then our bound will be better. *)
-Lemma swap_unique: 
-  forall A:Type, forall L1 L2 : list A, forall n m : nat,
-    (n+m) <= (min (length L1) (length L2)) 
-    -> (swap A L1 n m) = (swap A L2 n m)
-    -> L1 = L2.
-Proof.
-  intros A L1 L2 n m Hlen Heq.
-  apply Nat.min_glb_iff in Hlen.
-  decompose [and] Hlen.
-  rewrite<- (swapInv_len_geq A L1 n m H).
-  rewrite<- (swapInv_len_geq A L2 n m H0).
-  f_equal.
-  exact Heq.
-Qed.
+(** The goal of this argument is to place a bound on the number of
+weighings that are needed.  To do so, first prove that the inverse
+function does not contain duplicates.  *)
 
 Lemma procEvalInv_NoDup: 
   forall p : proc, forall L : list coins,
@@ -2012,6 +2012,13 @@ Proof.
   auto.
 Qed.
 
+(** ** procWorks 
+
+  procWorks defines a generic predict that defines what we mean for a
+  procedure to be correct.
+
+ *)
+
 Definition procWorks (p:proc) := 
   forall L:coins, 
     (length L = (procDepth p)) -> 
@@ -2019,58 +2026,7 @@ Definition procWorks (p:proc) :=
     ((hd gold (procEval p L)) = fake).
 
 
-Definition cardinality_witness (A:Type) (P: A -> Prop) (L : list A) :=
- (forall a:A, P a <-> In a L) /\ NoDup L.
-
-Definition cardinality (A:Type) (P: A -> Prop) (n:nat) :=
-  exists L : list A, (cardinality_witness A P L) /\ (length L) = n.
-
-Lemma cardinality_witness_unique:
-  forall A:Type, forall P: A -> Prop, forall L1 L2:list A,
-    ((cardinality_witness A P L1) /\ (cardinality_witness A P L2)) 
-    -> (length L1 = length L2).
-Proof.
-  intros A P L1 L2 H.
-  unfold cardinality_witness in H.
-  decompose [and] H.
-  apply list_cardinality.
-  apply conj.
-  intro a.
-  apply conj.
-  intro HL1.
-  apply H0.
-  apply H2.
-  exact HL1.
-  intro HL2.
-  apply H2.
-  apply H0.
-  exact HL2.
-  apply conj.
-  exact H3.
-  exact H4.
-Qed.
-
-Lemma cardinality_unique :
-forall A:Type, forall P: A -> Prop, forall n m:nat,
-  (cardinality A P n) /\ (cardinality A P m) -> n = m.
-Proof.
-  intros A P n m H.
-  decompose [and] H.
-  unfold cardinality in H0,H1.
-  elim H0; elim H1.
-  intros Lm Hm Ln Hn.
-  decompose [and] Hm.
-  decompose [and] Hn.
-  rewrite<- H5.
-  rewrite<- H3.
-  apply (cardinality_witness_unique A P).
-  apply conj.
-  exact H4.
-  exact H2.
-Qed.
-
-(* We have defined the notion of finite cardinalities. Now use this notion to show that there are 2^n possible 
- combination of fake and real coins.
+(** There are 2^n possible combinations of fake and real coins.
 *)
 Lemma cardinality_coins: 
   forall n:nat,
@@ -2223,7 +2179,7 @@ Proof.
   reflexivity.
 Qed.
 
-(* Detour: Define some new list primitives to make life simpler.
+(** ** List primitives (Detour)
 
 *)
 
@@ -2360,8 +2316,8 @@ Proof.
   apply colon_helper_nodup.
 Qed.
 
-(* expand is used to create a list of the given length containing the
-same element. *)
+(* [[expand]] is used to create a list of the given length containing the
+same element repeatedly. *)
 
 Fixpoint expand (A:Type) (a:A) (n:nat) := 
   match n with
@@ -2935,22 +2891,6 @@ Definition sorted_coins n :=
     | (S m) => fake :: (expand coin gold m)
   end.
 
-Lemma in_nil: 
-  forall A:Type, forall a b:A, 
-    In a (b::nil) <-> b = a.
-Proof.
-  intros A a b.
-  apply conj.
-  intro H.
-  unfold In in H.
-  decompose [or] H.
-  exact H0.
-  contradiction.
-  intro H.
-  rewrite H.
-  apply in_eq.
-Qed.
-
 Lemma sorted_coins_length:
   forall n:nat,
     length (sorted_coins n) = n.
@@ -3275,7 +3215,7 @@ Proof.
   apply NoDup_Permutation.
   apply procEvalInv_NoDup.
   intros x H.
-  apply in_nil in H.
+  apply In_one in H.
   rewrite<- H.
   rewrite sorted_coins_length.
   lia.
@@ -3324,9 +3264,16 @@ Proof.
   apply (procEval_sorts p Hworks x H0 H1).
 Qed.
 
-(* This establishes a bound on the minimum cost for a resolving a set
-of coins o given length. *)
-Lemma proc_bound: 
+(** * Establishing a bound
+
+  This section finally establishes a bound on the number of uses of
+  the scale for a given number of coins.  The proof relies on the
+  inverse function, and the cardinality arguments established in the
+  prior sections.
+
+ *)
+
+Theorem proc_bound: 
   forall p:proc, (procWorks p) -> (procDepth p) <= 3^(procCost p).
 Proof.
   intros p Hworks.
@@ -3348,469 +3295,14 @@ Proof.
   exact Hbound.
 Qed.
 
+(** * An Optimal Procedure 
+
+  This section defines an optimal procedure for any number of coins.
+  It culminates with a proof that no working procedure can use the
+  scale less than this one.
+
+*)
 Require Import Recdef.
-
-Function pn (n:nat) {measure (fun x => 6 * n ) n } :=
-  match n with
-    | 0 => Stop
-    | 1 => Stop
-    | 2 => (Weigh 1 Stop Stop (Swap 1 1 Stop))
-    | k => 
-      (let d := k/3 in
-       let m := k mod 3 in 
-       (Weigh d (pn d) (Swap (d+d) (d + m) (pn (d + m))) (Swap d d (pn d))))
-  end.
-Proof.
-assert (Hduh: 3<>0).
-lia.
-intros n n0 n1 n2 H1 H2 Hn.
-clear n1 n0 H1 H2.
-rewrite<- Hn.
-apply (lt_trans _ (2 *n +1) _).
-assert (Hmul:= (Nat.mul_div_le n 3) Hduh).
-lia.
-lia.
-intros n n0 n1 n2 Hn1 Hn0 Hn.
-clear n0 n1 Hn1 Hn0.
-rewrite<- Hn.
-apply Nat.mul_lt_mono_pos_l.
-lia.
-assert (Hduh: 3<>0).
-lia.
-rewrite (div_mod n 3 Hduh) at 3.
-apply Nat.add_lt_mono_r.
-rewrite<- (mult_1_l (n/3)) at 1.
-apply mult_lt_compat_r.
-lia.
-assert (Hsilly: n = n2 + 3).
-lia.
-rewrite Hsilly.
-rewrite<- (mult_1_l 3) at 1.
-rewrite Nat.div_add.
-lia.
-lia.
-Defined.
-
-Eval cbv in (pn 4).
-Eval cbv in (pn 12).
-
-Lemma pn4_is_p4:
-  (pn 4) = p4.
-Proof.
-  cbv.
-  reflexivity.
-Qed.
-
-Lemma pn12_is_p12:
-  (pn 12) = p12.
-Proof.
-  cbv.
-  reflexivity.
-Qed.
-
-Lemma max_eq_r:
-  forall n m p:nat,
-    n<=p -> m=p -> (Peano.max n m = p).
-Proof.
-  intros n m p Hnm Hmp.
-  rewrite Hmp.
-  apply Max.max_r.
-  exact Hnm.
-Qed.
-
-Lemma max_eq_l:
-  forall n m p:nat,
-    m <= p -> n = p -> (Peano.max n m = p).
-Proof.
-  intros n m p Hnm Hnp.
-  rewrite<- Hnp.
-  lia.
-Qed.
-
-Lemma max_plus:
-  forall n m: nat,
-    Peano.max (n+m) n = (n+m).
-Proof.
-  intros n m.
-  rewrite (plus_n_O n) at 2.
-  rewrite Max.plus_max_distr_l.
-  rewrite Max.max_0_r.
-  reflexivity.
-Qed.
-
-Lemma pn_procDepth:
-  forall n:nat, (procDepth (pn n) = n) \/ (n = 1).
-Proof.
-  intros n.
-  functional induction (pn n).
-  left.
-  simpl.
-  reflexivity.
-  right.
-  reflexivity.
-  left.
-  simpl.
-  reflexivity.
-  left.
-  remember (n/3) as n3.
-  unfold procDepth.
-  fold procDepth.
-  destruct n.
-  simpl in Heqn3.
-  rewrite Heqn3.
-  simpl.
-  reflexivity.
-  destruct n.
-  lia.
-  destruct n.
-  simpl in Heqn3.
-  rewrite Heqn3.
-  simpl.
-  reflexivity.
-  apply max_eq_r.
-  apply (le_trans _ (3 * n3) _).
-  lia.
-  rewrite-> (div_mod (S (S (S n))) 3).
-  rewrite<- Heqn3.
-  lia.
-  lia.
-  apply max_eq_l.
-  decompose [or] IHp1.
-  rewrite H.
-  rewrite max_plus.
-  rewrite (div_mod (S (S (S n))) 3).
-  rewrite<- Heqn3.
-  lia.
-  lia.
-  rewrite H.
-  simpl.
-  lia.
-  apply max_eq_r.
-  decompose [or] IHp1.
-  rewrite H.
-  rewrite Heqn3.
-  apply Nat.div_le_upper_bound.
-  lia.
-  lia.
-  rewrite H.
-  simpl.
-  lia.
-  apply max_eq_l.
-  decompose [or] IHp0.
-  rewrite H.
-  rewrite Heqn3.
-  rewrite (div_mod (S (S (S n))) 3) at 3.
-  lia.
-  lia.
-  rewrite H.
-  simpl.
-  lia.
-  rewrite (div_mod (S (S (S n))) 3) at 2.
-  rewrite<- (mult_1_r n3) at 1.
-  rewrite mult_n_Sm.
-  rewrite plus_assoc.
-  rewrite mult_n_Sm.
-  rewrite<- Heqn3.
-  rewrite mult_comm at 1.
-  lia.
-  lia.
-Qed.
-
-Lemma pn_procDepthBound:
-  forall n:nat, procDepth (pn n) <= n.
-Proof.
-  intro n.
-  case n.
-  simpl.
-  trivial.
-  intro n0.
-  case n0.
-  simpl.
-  lia.
-  intro n1.
-  assert (H:= (pn_procDepth (S (S n1)))).
-  decompose [or] H.
-  lia.
-  lia.
-Qed.
-
-Lemma pnWorks_helper:
-  forall L1 L2 L3 : coins, 
-    procWorks (pn (length L1)) -> 
-    exactlyn 1 L1 -> 
-    hd gold (procEval (pn (length L1)) (L1 ++ L2 ++ L3)) = fake.
-Proof.
-  intros L1 L2 L3 H Hex.
-  rewrite (procDepth_tl _ _ _ (pn_procDepthBound _)).
-  rewrite (hd_app _ _ (L2 ++ L3) gold).
-  remember (length L1) as n.
-  case n in *.
-  symmetry in Heqn.
-  apply list_length0 in Heqn.
-  rewrite Heqn in *.
-  inversion Hex.
-  case n in *.
-  case L1 in *.
-  simpl in Heqn.
-  lia.
-  simpl in Heqn.
-  apply eq_add_S in Heqn.
-  symmetry in Heqn.
-  apply list_length0 in Heqn.
-  rewrite Heqn in *.
-  inversion Hex.
-  simpl.
-  reflexivity.
-  inversion H2.
-  unfold procWorks in H.
-  apply H.
-  rewrite<- Heqn.
-  assert (Hdepth:= (pn_procDepth (S (S n)))).
-  decompose [or] Hdepth.
-  auto.
-  lia.
-  exact Hex.
-  rewrite<- procEval_length.
-  case L1 in *.
-  inversion Hex.
-  simpl.
-  lia.
-Qed.
-
-Lemma pnWorks:
-  forall n:nat, procWorks (pn n).
-Proof.
-  intro n.
-  assert (Hdepth:= pn_procDepth n).
-  functional induction (pn n).
-  unfold procWorks.
-  simpl.
-  intros L Hlen Hex.
-  apply list_length0 in Hlen.
-  rewrite Hlen.
-  simpl.
-  rewrite Hlen in Hex.
-  inversion Hex.
-  unfold procWorks.
-  simpl.
-  intros L Hlen Hex.
-  apply list_length0 in Hlen.
-  rewrite Hlen in Hex.
-  inversion Hex.
-  unfold procWorks.
-  simpl.
-  intros L Hlen Hex.
-  inversion Hex.
-  inversion H0.
-  simpl.
-  reflexivity.
-  simpl.
-  reflexivity.
-  inversion H.
-  unfold procEval.
-  assert ((weigh 1 (gold :: fake :: ns0)) = Gt).
-  cbv.
-  destruct ns0.
-  reflexivity.
-  reflexivity.
-  rewrite H5.
-  simpl.
-  reflexivity.
-  rewrite<- H4 in H1.
-  rewrite<- H1 in Hlen.
-  simpl in Hlen.
-  apply Nat.succ_inj in Hlen.
-  apply Nat.succ_inj in Hlen.
-  apply list_length0 in Hlen.
-  rewrite Hlen in H2.
-  inversion H2.
-  
-  remember (n / 3) as n3.
-  unfold procWorks.
-  intros L Hlen Hex.
-  
-  assert (IHpWorks : procWorks (pn n3)).
-  apply IHp.
-  apply pn_procDepth.
-  
-  assert (IHp0Works : procWorks (pn (n3 + n mod 3))).
-  apply IHp0.
-  apply pn_procDepth.
-  clear IHp.
-  clear IHp0.
-  clear IHp1.
-  
-  assert (Hlen': length L = n).
-  elim Hdepth.
-  intro HprocDepth.
-  rewrite HprocDepth in Hlen.
-  exact Hlen.
-  intro Hn1.
-  rewrite Hn1 in Heqn3.
-  simpl in Heqn3.
-  rewrite Heqn3 in Hlen.
-  rewrite Hn1 in Hlen.
-  simpl in Hlen.
-  rewrite Hn1 .
-  exact Hlen.
-  clear Hlen.
-  
-  assert (Hn3bound: n3 <> 0).
-  rewrite Heqn3.
-  case n in *.
-  contradiction.
-  case n in *.
-  contradiction.
-  case n in *.
-  contradiction.
-  replace (S (S (S n))) with (1 * 3 + n).
-  rewrite Nat.div_add_l.
-  lia.
-  lia.
-  lia.
-  remember (n mod 3) as nm3.
-  unfold procEval.
-  simpl.
-  fold procEval.
-  
-  remember (weigh n3 L) as wgt.
-  assert (H3len : n = n3 + (n3 + (n3 + nm3))).
-  rewrite Heqn3.
-  rewrite Heqnm3.
-  rewrite (div_mod n 3) at 1.
-  lia.
-  lia.
-  rewrite<- Hlen' in H3len.
-  assert (Hsplit1:= (list_split _ L _ _ H3len)).
-  destruct Hsplit1 as [L1].
-  destruct H as [L1b].
-  decompose [and] H.
-  clear H.
-  assert (Hsplit2:=(list_split _ L1b _ _ H2)).
-  destruct Hsplit2 as [L2].
-  destruct H as [L3].
-  clear H2.
-  decompose [and] H; clear H.
-  rewrite H5 in H3; clear H5.
-  rewrite H3.
-  assert (Hex2:= (exactlyn_app_rev 1 L Hex L1 (L2 ++ L3) H3)).
-  destruct Hex2 as [nL1].
-  destruct H as [nL1b].
-  decompose [and] H.
-  clear H.
-  assert (Hduh: L2 ++ L3 = L2 ++ L3).
-  reflexivity.
-  assert (Hex3:= (exactlyn_app_rev nL1b (L2++L3) H6 L2 L3) Hduh).
-  clear Hduh.
-  destruct Hex3 as [nL2].
-  destruct H as [nL3].
-  decompose [and] H.
-  clear H.
-  rewrite H10 in H7.
-  clear H6 H10 nL1b L1b.
-  
-  assert (Hw: (nat_compare nL2 nL1) = (weigh n3 L)).
-  rewrite H3.
-  rewrite app_assoc.
-  assert (HL12: (n3 + n3) <= length (L1 ++ L2)).
-  rewrite app_length.
-  rewrite H0; rewrite H1.
-  auto.
-  rewrite<- (weigh_tl _ _ _ HL12).
-  rewrite (weigh_defn _ L1 L2 H0 H1 nL1 nL2 H2 H5).
-  reflexivity.
-  
-  (* Now that we have setup the proof, do case analysis on the sections of the list. *)
-  destruct wgt.
-  
-  (* EQ case *)
-  assert (HnL3 : nL3 = 1).
-  rewrite<- Heqwgt in Hw.
-  apply nat_compare_eq in Hw.
-  rewrite Hw in *.
-  lia.
-  
-  (* Now we know there is eactly one fake coin in L3.*)
-  rewrite HnL3 in *.
-  
-  simpl.
-  rewrite app_assoc at 1.
-  assert (H: length (L1 ++ L2) = n3 + n3).
-  rewrite app_length; rewrite H0; rewrite H1.
-  auto.
-  rewrite<- H4 in *.
-  rewrite<- H.
-  rewrite swap_app.
-  apply (pnWorks_helper L3 L1 L2 IHp0Works H9).
-  
-  (* case Lt *)
-  rewrite<- Heqwgt in Hw.
-  assert (HL1: nL1 = 1).
-  apply nat_compare_lt in Hw.
-  lia.
-  rewrite HL1 in *.
-  rewrite<- H0 in *.
-  apply (pnWorks_helper L1 L2 L3 IHpWorks H2).
-  
-  (* case Gt *)
-  rewrite<- Heqwgt in Hw.
-  assert (HL2: nL2 = 1).
-  apply nat_compare_gt in Hw.
-  lia.
-  rewrite HL2 in *.
-  rewrite app_assoc.
-  rewrite swap_tl.
-  rewrite<- H0 at 2.
-  rewrite<- H1 at 2.
-  rewrite swap_app.
-  rewrite<- app_assoc.
-  rewrite<- H1 in *.
-  apply (pnWorks_helper L2 L1 L3 IHpWorks H5).
-  rewrite app_length.
-  lia.
-Qed.
-
-Eval cbv in List.map (fun x=> procCost (pn x)) [0;1;2;3;4;5;6;7;8;9;10;11;12].
-
-Lemma pnCostPow3:
-  forall n:nat, procCost (pn (3^n)) = n.
-Proof.
-  intro n. 
-  induction n.
-  simpl; reflexivity.
-  replace (3 ^ (S n)) with (3 * (3 ^ n)).
-  remember (3 * 3 ^ n) as k.
-  assert (Hduh : 3 ^ n > 0).
-  assert (Hyep := Nat.pow_nonzero 3 n).
-  lia.
-  functional induction (pn k).
-  lia.
-  lia.
-  lia.
-  unfold procCost; fold procCost.
-  replace (3 * 3 ^ n / 3) with (3 ^ n).
-  replace (3 * (3 ^ n) mod 3) with 0.
-  replace (3 ^ n + 0) with (3 ^ n).
-  rewrite Max.max_idempotent.
-  rewrite Max.max_idempotent.
-  rewrite IHn.
-  lia.
-  lia.
-  rewrite mult_comm.
-  rewrite Nat.mod_mul.
-  lia.
-  lia.
-  rewrite mult_comm.
-  rewrite Nat.div_mul.
-  reflexivity.
-  lia.
-  rewrite pow_succ_r.
-  reflexivity.
-  lia.
-Qed.
-
-(* Oh sad day, our definition for pn above is not optimal.  We must redo the argument
-with a more sophisticated pn. *)
 
 Lemma weigh_exactlyn: 
   forall L1 L2 L3 : coins, 
@@ -3876,12 +3368,12 @@ Qed.
    the basic idea.  So to apply divide and conquer we assume that we
    have a working procedure "f" for any length list.  Then weigh the
    first "dw" coins against the next "dw" coins with "drest" leftover.
-   The proc_split procedure defines a simple decision tree.  If
+   The procSplit procedure defines a simple decision tree.  If
    they're less, the fake is in the first group and apply "f" to it.
    If they are equal, then the fake is in the remainder.  And if they
    are greater apply "f" to the second group of d coins.  *)
 
-Definition proc_split (pdw pdrest : proc) :=
+Definition procSplit (pdw pdrest : proc) :=
   let dw := procDepth pdw in
   let drest := procDepth pdrest in
   (Weigh dw 
@@ -3889,14 +3381,14 @@ Definition proc_split (pdw pdrest : proc) :=
          (Swap (dw + dw) drest pdrest) 
          (Swap dw dw pdw)).
 
-Lemma proc_split_depth: 
+Lemma procSplit_depth: 
   forall pdw pdrest : proc, 
   let dw := procDepth pdw in
   let drest := procDepth pdrest in
-    procDepth (proc_split pdw pdrest) = dw + dw + drest.
+    procDepth (procSplit pdw pdrest) = dw + dw + drest.
 Proof.
   intros pdw pdrest dw drest.
-  unfold proc_split.
+  unfold procSplit.
   simpl.
   fold dw.
   fold drest.
@@ -3912,7 +3404,7 @@ Proof.
   lia.
 Qed.
 
-Lemma proc_split_lt_gt:
+Lemma procSplit_lt_gt:
   forall p:proc, forall L1 L2 L3 : coins,
     procWorks p -> 
     procDepth p = length L1 -> 
@@ -3951,17 +3443,17 @@ Proof.
   exact Hexact.
 Qed.
 
-Lemma proc_split_works: 
+Lemma procSplit_works: 
   forall pdw pdrest :proc,
     (procWorks pdw) -> 
     (procWorks pdrest) ->
-    (procWorks (proc_split pdw pdrest)).
+    (procWorks (procSplit pdw pdrest)).
 Proof.
   intros pdw pdrest Hdw Hdrest.
   unfold procWorks.
   intros L Hlen Hexact.
-  rewrite proc_split_depth in Hlen.
-  unfold proc_split.
+  rewrite procSplit_depth in Hlen.
+  unfold procSplit.
   unfold procEval.
   fold procEval.
   set (dw := procDepth pdw).
@@ -4007,7 +3499,7 @@ Proof.
   exact Hw.
   
   (* case Lt *)
-  apply proc_split_lt_gt.
+  apply procSplit_lt_gt.
   auto.
   fold dw; rewrite<- H5; rewrite <- H1.
   reflexivity.
@@ -4025,7 +3517,7 @@ Proof.
   rewrite<- H1 at 1.
   rewrite (swap_app _ L1 L2).
 
-  apply proc_split_lt_gt.
+  apply procSplit_lt_gt.
   exact Hdw.
   fold dw.
   rewrite H5.
@@ -4034,7 +3526,7 @@ Proof.
   exact Hw.
 Qed.
                                                                
-Function pn2 (n:nat) {measure (fun x => n ) n } :=
+Function pn (n:nat) {measure (fun x => n ) n } :=
   match n with
     | 0 => Stop
     | 1 => (Swap 0 1 Stop)  (* This hack makes the procDepth uniform. *)
@@ -4042,8 +3534,8 @@ Function pn2 (n:nat) {measure (fun x => n ) n } :=
     | k => 
       (let d := k/3 in
        match k mod 3 with
-         | 2 =>  proc_split (pn2 (d+1)) (pn2 d)
-         | m =>  proc_split (pn2 d) (pn2 (d+m))
+         | 2 =>  procSplit (pn (d+1)) (pn d)
+         | m =>  procSplit (pn d) (pn (d+m))
        end)
   end.
 Proof.
@@ -4138,19 +3630,19 @@ Proof.
   lia.
 Defined.
 
-Lemma pn2_depth:
-  forall n:nat, procDepth (pn2 n) = n.
+Lemma pn_depth:
+  forall n:nat, procDepth (pn n) = n.
 Proof.
   intros n.
 
-  functional induction (pn2 n).
+  functional induction (pn n).
   simpl; lia.
   simpl; lia.
   
   assert (Hez :  n / 3 + 1 + (n / 3 + 1) + n / 3 = 3 * (n/3) + 2).
   lia.
   
-  rewrite proc_split_depth.
+  rewrite procSplit_depth.
   rewrite IHp.
   rewrite IHp0.
   rewrite Hez.
@@ -4159,7 +3651,7 @@ Proof.
   apply div_mod.
   lia.
   
-  rewrite proc_split_depth.
+  rewrite procSplit_depth.
   rewrite IHp.
   rewrite IHp0.
   
@@ -4171,11 +3663,11 @@ Proof.
   auto.
 Qed.
 
-Lemma pn2Works:
-  forall n:nat, procWorks (pn2 n).
+Lemma pnWorks:
+  forall n:nat, procWorks (pn n).
 Proof.
   intro n.
-  functional induction (pn2 n).
+  functional induction (pn n).
 
   (* Case 0 *)
   unfold procWorks.
@@ -4200,22 +3692,22 @@ Proof.
 
 
   (* Case n/3 mod 3 = 2 *)
-  apply proc_split_works.
+  apply procSplit_works.
   exact IHp.
   exact IHp0.
 
   (* Case n/3 mod 3 <> 2 *)
-  apply proc_split_works.
+  apply procSplit_works.
   exact IHp.
   exact IHp0.
 Qed.
 
-Lemma pn2_cost_monotonic_S: 
-  forall n : nat, procCost (pn2 n) <= procCost (pn2 (S n)).
+Lemma pn_cost_monotonic_S: 
+  forall n : nat, procCost (pn n) <= procCost (pn (S n)).
 Proof.
   intro n.
 
-  functional induction (pn2 n).
+  functional induction (pn n).
 
   (* Case n = 0 *)
   simpl. lia.
@@ -4224,12 +3716,12 @@ Proof.
   simpl. lia.
 
   (* Case n mod 3 = 2 *)
-  unfold proc_split.
+  unfold procSplit.
   unfold procCost. fold procCost.
-  remember (procCost (pn2 (n/3 + 1))) as c31.
-  remember (procCost (pn2 (n/3))) as c30.
+  remember (procCost (pn (n/3 + 1))) as c31.
+  remember (procCost (pn (n/3))) as c30.
   
-  rewrite pn2_equation.
+  rewrite pn_equation.
 
   assert (Hsilly: S n mod 3 = 0).
   replace (S n) with (n + 1).
@@ -4244,7 +3736,7 @@ Proof.
   simpl in e0.
   lia.
   
-  unfold proc_split.
+  unfold procSplit.
   unfold procCost. fold procCost.
 
   rewrite plus_0_r.
@@ -4273,13 +3765,13 @@ Proof.
   auto.
 
   (* Case n mod 3 <> 2 *)
-  unfold proc_split.
+  unfold procSplit.
   unfold procCost. fold procCost.
 
-  remember (procCost (pn2 (n / 3 + n mod 3))) as cnm3.
-  remember (procCost (pn2 (n/3))) as cn3.
+  remember (procCost (pn (n / 3 + n mod 3))) as cnm3.
+  remember (procCost (pn (n/3))) as cn3.
 
-  rewrite pn2_equation.
+  rewrite pn_equation.
 
   destruct n.
   contradiction y.
@@ -4329,7 +3821,7 @@ Proof.
   auto.
   rewrite H2.
 
-  unfold proc_split; unfold procCost; fold procCost.
+  unfold procSplit; unfold procCost; fold procCost.
 
   rewrite<- Heqcn3.
   
@@ -4343,7 +3835,7 @@ Proof.
   exact IHp0.
 
   rewrite H0.
-  unfold proc_split; unfold procCost; fold procCost.
+  unfold procSplit; unfold procCost; fold procCost.
 
   apply plus_le_compat_l.
 
@@ -4378,8 +3870,8 @@ Proof.
   lia.
 Qed.
 
-Lemma pn2_cost_monotonic_add:
-  forall n k:nat, procCost (pn2 n) <= procCost (pn2 (n+k)).
+Lemma pn_cost_monotonic_add:
+  forall n k:nat, procCost (pn n) <= procCost (pn (n+k)).
 Proof.
   intros n k.
   induction k.
@@ -4387,15 +3879,15 @@ Proof.
   rewrite plus_0_r.
   auto.
 
-  apply (le_trans _ (procCost (pn2 (n+k))) _).
+  apply (le_trans _ (procCost (pn (n+k))) _).
   exact IHk.
   replace (n+ S k) with (S (n+k)).
-  apply pn2_cost_monotonic_S.
+  apply pn_cost_monotonic_S.
   lia.
 Qed.
 
-Lemma pn2_cost_monotonic:
-      forall n m:nat, n<=m -> procCost (pn2 n) <= procCost(pn2 m).
+Lemma pn_cost_monotonic:
+      forall n m:nat, n<=m -> procCost (pn n) <= procCost(pn m).
 Proof.
   intros n m Hnm.
   apply Nat.le_exists_sub in Hnm.
@@ -4404,11 +3896,11 @@ Proof.
   decompose [and] H.
   rewrite H0.
   rewrite plus_comm.
-  apply pn2_cost_monotonic_add.
+  apply pn_cost_monotonic_add.
 Qed.
 
-Lemma pn2_cost_pow3:
-  forall n:nat, procCost(pn2 (3^n)) = n.
+Lemma pn_cost_pow3:
+  forall n:nat, procCost(pn (3^n)) = n.
 Proof.
   intro n. 
   induction n.
@@ -4419,7 +3911,7 @@ Proof.
   assert (Hduh : 3 ^ n > 0).
   assert (Hyep := Nat.pow_nonzero 3 n).
   lia.
-  functional induction (pn2 k).
+  functional induction (pn k).
   lia.
   lia.
 
@@ -4433,7 +3925,7 @@ Proof.
   rewrite Nat.div_mul.
   rewrite plus_0_r.
   
-  unfold proc_split; unfold procCost; fold procCost.
+  unfold procSplit; unfold procCost; fold procCost.
 
   rewrite IHn.
   rewrite Max.max_idempotent.
@@ -4447,18 +3939,21 @@ Proof.
   lia.
 Qed.
             
-Lemma pn2_optimal:
-  forall p:proc, procWorks p -> procCost (pn2 (procDepth p)) <= procCost p.
+Theorem pn_optimal:
+  forall p:proc, procWorks p -> procCost (pn (procDepth p)) <= procCost p.
 Proof.
   intros p Hp.
   apply proc_bound in Hp.
-  apply (le_trans _ (procCost (pn2 (3 ^ (procCost p)))) _).
-  apply pn2_cost_monotonic.
+  apply (le_trans _ (procCost (pn (3 ^ (procCost p)))) _).
+  apply pn_cost_monotonic.
   exact Hp.
 
-  rewrite pn2_cost_pow3.
+  rewrite pn_cost_pow3.
   auto.
 Qed.
+
+(** Ta-daaaa *)
+
 
 End Scales.
 

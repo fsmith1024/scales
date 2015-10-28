@@ -11,8 +11,9 @@ COQC?= coqc
 COQFLAGS?= $(COQLIBS)
 COQDOC?= coqdoc
 COQDOCFLAGS?= --parse-comments 
+COQDEP?=coqdep -c
 
-VFILES:= Elementary.v Scales.v
+VFILES:= Elementary.v Cardinality.v Scales.v
 VOFILES:= $(VFILES:.v=.vo)
 VdFILES:= $(VFILTES:.v=.v.d)
 
