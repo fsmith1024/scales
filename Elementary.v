@@ -292,7 +292,7 @@ Proof.
   rewrite<- mult_succ_l.
   rewrite<- Nat.add_1_r.
   rewrite Nat.sub_add.
-  rewrite<- div_mod.
+  rewrite<- Nat.div_mod.
   lia.
   lia.
   lia.
@@ -310,7 +310,7 @@ Lemma mod_div_nostep:
     b<>0 -> (S a) mod b > 0 -> (((S a) / b) = a/b).
 Proof.
   intros a b Hb Hmod.
-  rewrite (div_mod a b Hb) at 1.
+  rewrite (Nat.div_mod a b Hb) at 1.
   rewrite<- Nat.add_1_r.
   rewrite<- plus_assoc.
   rewrite mult_comm at 1.
@@ -380,10 +380,10 @@ Proof.
   rewrite mult_1_r.
   rewrite<- Htrue at 5.
   rewrite plus_assoc.
-  rewrite<- (div_mod _ b Hb).
+  rewrite<- (Nat.div_mod _ b Hb).
   rewrite (plus_n_O (b * (S a / b))).
   rewrite<- Hmod' at 1.
-  rewrite<- (div_mod _ b Hb).
+  rewrite<- (Nat.div_mod _ b Hb).
   lia.
   
   rewrite (Nat.mod_small _ _ Hbogus) in Hmod.

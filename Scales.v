@@ -106,16 +106,16 @@ Lemma exactlyn_len:
 Proof.
   intro L.
   induction L.
-  mini_smash.
-  intro n.
-  inversion 1.
-  apply le_n_S.
-  apply IHL.
-  exact H2.
-  simpl.
-  apply le_S.
-  apply IHL.
-  exact H2.
+  - mini_smash.
+  - intro n.
+    inversion 1.
+    + apply le_n_S.
+      apply IHL.
+      exact H2.
+    + simpl.
+      apply le_S.
+      apply IHL.
+      exact H2.
 Qed.
 
 Lemma exactlyn_nil:
@@ -131,12 +131,12 @@ Lemma exactlyn_gold_rev:
 Proof.
   intro.
   induction L.
-  intro n.
-  inversion 1.
-  exact H2.
-  intro n.
-  inversion 1.
-  exact H2.
+  - intro n.
+    inversion 1.
+    exact H2.
+  - intro n.
+    inversion 1.
+    exact H2.
 Qed.
 
 Lemma exactlyn_gold_eq: 
@@ -165,18 +165,18 @@ Lemma exactlyn_app:
 Proof.
   intros L1 n1.
   induction 1.
-  simpl.
-  tauto.
-  simpl.
-  intros L2 n2 Hn2.
-  apply exactlyn_fake.
-  apply IHexactlyn.
-  exact Hn2.
-  intros L2 n2 Hn2.
-  simpl.
-  apply exactlyn_gold.
-  apply IHexactlyn.
-  exact Hn2.
+  - simpl.
+    tauto.
+  - simpl.
+    intros L2 n2 Hn2.
+    apply exactlyn_fake.
+    apply IHexactlyn.
+    exact Hn2.
+  - intros L2 n2 Hn2.
+    simpl.
+    apply exactlyn_gold.
+    apply IHexactlyn.
+    exact Hn2.
 Qed.
 
 Lemma exactlyn_app_rev_simpl:
@@ -184,37 +184,37 @@ Lemma exactlyn_app_rev_simpl:
     exactlyn n (L1 ++ L2) -> exists n1 n2:nat, exactlyn n1 L1 /\ exactlyn n2 L2.
 Proof.
   induction L1.
-  intros L2 n H.
-  simpl in H.
-  exists 0; exists n.
-  smash.
-  intros L2 n H.
-  destruct a.
-  rewrite<- app_comm_cons in H.
-  apply exactlyn_gold_rev in H.
-  specialize (IHL1 L2 n H).
-  elim IHL1.
-  intro n1.
-  intro H2.
-  elim H2.
-  intro n2.
-  intro H3.
-  exists n1; exists n2.
-  decompose [and] H3.
-  apply conj.
-  apply exactlyn_gold.
-  exact H0.
-  exact H1.
-  rewrite<- app_comm_cons in H.
-  apply exactlyn_fake_rev in H.
-  specialize (IHL1 L2 (pred n) H).
-  elim IHL1.
-  intros n1 H2; elim H2; intros n2 H3.
-  exists (S n1); exists n2.
-  decompose [and] H3.
-  apply conj.
-  apply exactlyn_fake; exact H0.
-  exact H1.
+  - intros L2 n H.
+    simpl in H.
+    exists 0; exists n.
+    mini_smash.
+  - intros L2 n H.
+    destruct a.
+    + rewrite<- app_comm_cons in H.
+      apply exactlyn_gold_rev in H.
+      specialize (IHL1 L2 n H).
+      elim IHL1.
+      intro n1.
+      intro H2.
+      elim H2.
+      intro n2.
+      intro H3.
+      exists n1; exists n2.
+      decompose [and] H3.
+      apply conj.
+      * apply exactlyn_gold.
+        exact H0.
+      * exact H1.
+    + rewrite<- app_comm_cons in H.
+        apply exactlyn_fake_rev in H.
+        specialize (IHL1 L2 (pred n) H).
+        elim IHL1.
+        intros n1 H2; elim H2; intros n2 H3.
+        exists (S n1); exists n2.
+        decompose [and] H3.
+        apply conj.
+      * apply exactlyn_fake; exact H0.
+      * exact H1.
 Qed.
 
 Lemma exacltyn_app_comm:
@@ -234,99 +234,99 @@ Lemma exactlyn_app_rev:
 Proof.
   intros n L H.
   induction H.
-  intros L1 L2.
-  intro Hnil.
-  exists 0.
-  exists 0.
-  simpl.
-  symmetry in Hnil.
-  apply app_eq_nil in Hnil.
-  decompose [and] Hnil.
-  rewrite H; rewrite H0.
-  apply conj.
-  constructor.
-  apply conj.
-  constructor.
-  reflexivity.
-  intros L1 L2.
-  destruct L1.
-  simpl.
-  intro HL2.
-  rewrite<- HL2.
-  exists 0.
-  exists (S n).
-  apply conj.
-  constructor.
-  apply conj.
-  apply exactlyn_fake.
-  exact H.
-  simpl.
-  reflexivity.
-  rewrite <- app_comm_cons.
-  intro H1.
-  assert (ns = L1 ++ L2).
-  change ns with (tl (fake::ns)).
-  rewrite H1.
-  simpl; reflexivity.
-  specialize (IHexactlyn L1 L2 H0).
-  elim IHexactlyn.
-  intro n1.
-  intro Htemp.
-  elim Htemp.
-  intro n2.
-  intro Hand.
-  decompose [and] Hand.
-  exists (S n1).
-  exists n2.
-  apply conj.
-  replace c with fake.
-  apply exactlyn_fake.
-  exact H2.
-  change c with (hd fake (c :: L1 ++ L2)).
-  rewrite <- H1.
-  simpl; reflexivity.
-  apply conj.
-  exact H4.
-  simpl.
-  f_equal.
-  exact H5.
-  intros L1 L2 Happ.
-  destruct L1.
-  simpl in Happ.
-  exists 0.
-  exists n.
-  apply conj.
-  constructor.
-  apply conj.
-  rewrite <- Happ.
-  apply exactlyn_gold.
-  exact H.
-  simpl; reflexivity.
-  assert (ns = L1 ++ L2).
-  change ns with (tl (gold::ns)).
-  rewrite Happ.
-  simpl.
-  reflexivity.
-  specialize (IHexactlyn L1 L2 H0).
-  elim IHexactlyn.
-  intro n1.
-  intro Htemp.
-  elim Htemp.
-  intro n2.
-  intro Hand.
-  decompose [and] Hand.
-  exists n1; exists n2.
-  apply conj.
-  replace c with gold.
-  apply exactlyn_gold.
-  exact H1.
-  rewrite<- app_comm_cons in Happ.
-  change c with (hd gold (c :: L1 ++ L2)).
-  rewrite <- Happ.
-  simpl; reflexivity.
-  apply conj.
-  exact H3.
-  exact H4.
+  - intros L1 L2.
+    intro Hnil.
+    exists 0.
+    exists 0.
+    simpl.
+    symmetry in Hnil.
+    apply app_eq_nil in Hnil.
+    decompose [and] Hnil.
+    rewrite H; rewrite H0.
+    apply conj.
+    + constructor.
+    + apply conj.
+      constructor.
+      reflexivity.
+  - intros L1 L2.
+    destruct L1.
+    + simpl.
+      intro HL2.
+      rewrite<- HL2.
+      exists 0.
+      exists (S n).
+      apply conj.
+      * constructor.
+      *  apply conj.
+         apply exactlyn_fake.
+         exact H.
+         simpl.
+         reflexivity.
+    + rewrite <- app_comm_cons.
+      intro H1.
+      assert (ns = L1 ++ L2).
+      change ns with (tl (fake::ns)).
+      rewrite H1.
+      simpl; reflexivity.
+      specialize (IHexactlyn L1 L2 H0).
+      elim IHexactlyn.
+      intro n1.
+      intro Htemp.
+      elim Htemp.
+      intro n2.
+      intro Hand.
+      decompose [and] Hand.
+      exists (S n1).
+      exists n2.
+      apply conj.
+      * replace c with fake.
+        apply exactlyn_fake.
+        exact H2.
+        change c with (hd fake (c :: L1 ++ L2)).
+        rewrite <- H1.
+        simpl; reflexivity.
+      * apply conj.
+        exact H4.
+        simpl.
+        f_equal.
+        exact H5.
+  - intros L1 L2 Happ.
+    destruct L1.
+    + simpl in Happ.
+      exists 0.
+      exists n.
+      apply conj.
+      constructor.
+      apply conj.
+      * rewrite <- Happ.
+        apply exactlyn_gold.
+        exact H.
+      * simpl; reflexivity.
+    + assert (ns = L1 ++ L2).
+      change ns with (tl (gold::ns)).
+      rewrite Happ.
+      simpl.
+      reflexivity.
+      specialize (IHexactlyn L1 L2 H0).
+      elim IHexactlyn.
+      intro n1.
+      intro Htemp.
+      elim Htemp.
+      intro n2.
+      intro Hand.
+      decompose [and] Hand.
+      exists n1; exists n2.
+      apply conj.
+      *  replace c with gold.
+         apply exactlyn_gold.
+         exact H1.
+         rewrite<- app_comm_cons in Happ.
+         change c with (hd gold (c :: L1 ++ L2)).
+         rewrite <- Happ.
+         simpl; reflexivity.
+      * apply conj.
+        exact H3.
+        exact H4.
 Qed.
 
 (** * Encoding weighing
@@ -393,21 +393,21 @@ Lemma swap_rec_fst_len:
 Proof.
   intros A L.
   induction L.
-  simpl; reflexivity.
-  induction n.
-  induction m.
-  simpl; reflexivity.
-  simpl.
-  f_equal.
-  replace (length L) with ((length L) - 0).
-  apply IHL.
-  rewrite minus_n_O.
-  reflexivity.
-  induction m.
-  simpl.
-  apply IHL.
-  simpl.
-  apply IHL.
+  - simpl; reflexivity.
+  - induction n.
+    + induction m.
+      * simpl; reflexivity.
+      * simpl.
+      f_equal.
+      replace (length L) with ((length L) - 0).
+      apply IHL.
+      rewrite minus_n_O.
+      reflexivity.
+    + induction m.
+      * simpl.
+        apply IHL.
+      * simpl.
+        apply IHL.
 Qed.
 
 Lemma swap_equiv:
@@ -1190,6 +1190,7 @@ tedious proofs.
 
 *)
 
+
 Ltac smash := 
   repeat 
     (auto;simpl;
@@ -1217,6 +1218,7 @@ Ltac smash :=
 
      end); 
   auto.
+
 
 (** * Correctness 
 
@@ -2171,7 +2173,7 @@ Proof.
   rewrite map_length.
   rewrite H0.
   replace (2 ^ n + 2 ^ n) with (2 * (2 ^ n)).
-  rewrite<- pow_succ_r.
+  rewrite<- Nat.pow_succ_r.
   reflexivity.
   apply le_0_n.
   simpl.
@@ -2507,6 +2509,7 @@ Lemma exactly1_pos_length:
     len > n -> length (exactly1_pos len n) = len.
 Proof.
   smash.
+  
   unfold exactly1_pos.
   rewrite app_length.
   rewrite app_length.
@@ -2542,7 +2545,7 @@ Proof.
   simpl.
   f_equal.
   apply expand_length.
-  omega.
+  lia.
 Qed.
 
 Lemma exactly1_pos_exactly1:
@@ -2592,7 +2595,7 @@ Proof.
   simpl.
   rewrite expand_length.
   rewrite expand_length.
-  omega.
+  lia.
 Qed.
 
 Lemma exactly1_gen_exact:
@@ -2618,7 +2621,7 @@ Proof.
   replace (S n - n - 1) with 0.
   simpl.
   reflexivity.
-  omega.
+  lia.
 Qed.
 
 Lemma exactly1_pos_S: 
@@ -2638,12 +2641,12 @@ Proof.
   rewrite<- expand_app.
   replace (S (len - 1)) with len.
   reflexivity.
-  omega.
-  omega.
+  lia.
+  lia.
   rewrite<- expand_app.
   replace (S (len - S n - 1)) with (len - n - 1).
   reflexivity.
-  omega.
+  lia.
 Qed.
 
 Lemma exactly1_pos_eq:
@@ -3364,15 +3367,19 @@ Proof.
   exact H5.
 Qed.
 
-(* To simplify our lives, lets try to make a higher-order function for
-   the basic idea.  So to apply divide and conquer we assume that we
-   have a working procedure "f" for any length list.  Then weigh the
-   first "dw" coins against the next "dw" coins with "drest" leftover.
-   The procSplit procedure defines a simple decision tree.  If
-   they're less, the fake is in the first group and apply "f" to it.
-   If they are equal, then the fake is in the remainder.  And if they
-   are greater apply "f" to the second group of d coins.  *)
+(** 
 
+  Define a higher-order function that applies the divide-and-conquer
+  approach.  [procSplit] takes working procedures for different
+  lengths, and then applies those procedures to different sets of
+  coins.
+
+  The [procSplit] procedure defines a simple decision tree.  First
+  weight the first "dw" coins against the next "dw" coins with "drest"
+  leftover.  If the two "dw" sets have the same weight then the fake
+  is in "drest".  Otherwise, it is in the lighter "dw" set.
+
+ *)
 Definition procSplit (pdw pdrest : proc) :=
   let dw := procDepth pdw in
   let drest := procDepth pdrest in
@@ -3392,7 +3399,16 @@ Proof.
   simpl.
   fold dw.
   fold drest.
-  rewrite max_plus.
+  rewrite (Max.max_l (dw + dw) dw).
+  rewrite (Max.max_l (dw + dw + drest) drest).
+  rewrite (Max.max_r dw (dw + dw + drest)).
+  rewrite (Max.max_l (dw + dw + drest) (dw + dw)).
+  rewrite (Max.max_r _ _).
+  reflexivity.
+  lia.
+  lia.
+  lia.
+  lia.
   lia.
 Qed.
 
@@ -3648,7 +3664,7 @@ Proof.
   rewrite Hez.
   rewrite<- e0 at 3.
   symmetry.
-  apply div_mod.
+  apply Nat.div_mod.
   lia.
   
   rewrite procSplit_depth.
@@ -3658,7 +3674,7 @@ Proof.
   assert (Hez :  n / 3 + n / 3 + (n / 3 + n mod 3) = 3 * (n/3) + n mod 3).
   lia.
   rewrite Hez.
-  rewrite<- div_mod.
+  rewrite<- Nat.div_mod.
   auto.
   auto.
 Qed.
@@ -3780,7 +3796,7 @@ Proof.
   
   assert (Hm3 : m3 = 0 \/ m3 = 1 \/ m3 = 2).
   assert (H' : (S (S n) mod 3) < 3).
-  apply mod_bound_pos.
+  apply Nat.mod_bound_pos.
   lia.
   lia.
   lia.
@@ -3935,7 +3951,7 @@ Proof.
   auto.
 
   symmetry.
-  apply pow_succ_r.
+  apply Nat.pow_succ_r.
   lia.
 Qed.
             
